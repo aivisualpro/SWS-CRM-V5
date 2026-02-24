@@ -6,6 +6,8 @@ import { computed, ref } from 'vue'
 import { cn } from '@/lib/utils'
 import { provideSidebarContext, SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAME, SIDEBAR_KEYBOARD_SHORTCUT, SIDEBAR_WIDTH, SIDEBAR_WIDTH_ICON } from './utils'
 
+const { direction } = useAppSettings()
+
 const props = withDefaults(defineProps<{
   defaultOpen?: boolean
   open?: boolean
@@ -69,7 +71,7 @@ provideSidebarContext({
   <TooltipProvider :delay-duration="0">
     <div
       data-slot="sidebar-wrapper"
-      dir="ltr"
+      :dir="direction"
       :style="{
         '--sidebar-width': SIDEBAR_WIDTH,
         '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
