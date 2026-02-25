@@ -34,48 +34,23 @@ export default defineEventHandler(async (event) => {
     const name = profile.name || ''
     const picture = profile.picture || ''
 
-    // ── Upsert user into BigQuery Users table ──
-    // First check if user already exists by email
-    const checkSql = `SELECT Email FROM \`appsheet-417200.SWSCRMV4.Users\` WHERE Email = @email LIMIT 1`
+    // ── Check if user exists in the Users table ──
+    const checkSql = `SELECT Email FROM \`appsheet-417200.SWSCRMV4.Users\` WHERE LOWER(Email) = LOWER(@email) LIMIT 1`
     const existingRows = await queryBigQuery(checkSql, { email })
 
-    if (existingRows.length > 0) {
-      // Update existing user: set Status = TRUE and update GoogleId
-      const updateSql = `
-        UPDATE \`appsheet-417200.SWSCRMV4.Users\`
-        SET Status = TRUE
-        WHERE Email = @email
-      `
-      await queryBigQuery(updateSql, { email })
+    if (existingRows.length === 0) {
+      // User NOT in the system — redirect back to login with an error
+      const errorMsg = encodeURIComponent(email)
+      return sendRedirect(event, `/login?error=unauthorized&email=${errorMsg}`)
     }
-    else {
-      // Insert new user with Status = TRUE
-      const nameParts = name.split(' ')
-      const firstName = nameParts[0] || ''
-      const lastName = nameParts.slice(1).join(' ') || ''
 
-      const escape = (v: string) => (v || '').replace(/'/g, "\\'")
-
-      const insertSql = `
-        INSERT INTO \`appsheet-417200.SWSCRMV4.Users\`
-          (\`First Name\`, \`Last Name\`, Email, Phone, Role, \`Secondary Role\`, Vendors, Department, Branch, Status, Location, UTC)
-        VALUES (
-          '${escape(firstName)}',
-          '${escape(lastName)}',
-          '${escape(email)}',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          TRUE,
-          '',
-          0
-        )
-      `
-      await queryBigQuery(insertSql)
-    }
+    // ── User exists — update Status = TRUE ──
+    const updateSql = `
+      UPDATE \`appsheet-417200.SWSCRMV4.Users\`
+      SET Status = TRUE
+      WHERE LOWER(Email) = LOWER(@email)
+    `
+    await queryBigQuery(updateSql, { email })
 
     // ── Set auth cookie ──
     setCookie(event, 'auth_user', JSON.stringify({

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2, ShieldX, X } from 'lucide-vue-next'
 
 definePageMeta({
   layout: 'blank',
@@ -12,7 +12,28 @@ if (isLoggedIn.value) {
   navigateTo('/')
 }
 
+const route = useRoute()
 const isLoading = ref(false)
+
+// ── Error state from rejected login ──
+const authError = computed(() => route.query.error as string | undefined)
+const rejectedEmail = computed(() => route.query.email as string | undefined)
+const showError = ref(!!route.query.error)
+
+function dismissError() {
+  showError.value = false
+}
+
+// Auto-dismiss error after 8 seconds
+let errorTimer: ReturnType<typeof setTimeout> | null = null
+onMounted(() => {
+  if (showError.value) {
+    errorTimer = setTimeout(() => { showError.value = false }, 8000)
+  }
+})
+onUnmounted(() => {
+  if (errorTimer) clearTimeout(errorTimer)
+})
 
 function loginWithGoogle() {
   isLoading.value = true
@@ -68,6 +89,24 @@ useSeoMeta({
           <div class="login-mobile-logo">
             <img src="/logo-192.png" alt="SWS CRM" class="size-10 rounded-lg" />
           </div>
+
+          <!-- Unauthorized error banner -->
+          <Transition name="error-slide">
+            <div v-if="showError && authError === 'unauthorized'" class="login-error">
+              <div class="login-error__icon">
+                <ShieldX class="size-5" />
+              </div>
+              <div class="login-error__content">
+                <p class="login-error__title">Access Denied</p>
+                <p class="login-error__msg">
+                  <strong>{{ rejectedEmail }}</strong> is not authorized to access this platform. Please contact your administrator or try a different account.
+                </p>
+              </div>
+              <button class="login-error__close" @click="dismissError">
+                <X class="size-4" />
+              </button>
+            </div>
+          </Transition>
 
           <div class="login-form__header">
             <h1 class="text-2xl font-bold tracking-tight text-foreground">
@@ -370,5 +409,102 @@ useSeoMeta({
   position: absolute;
   bottom: 1.5rem;
   text-align: center;
+}
+
+/* Error banner */
+.login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: oklch(0.95 0.02 25);
+  border: 1px solid oklch(0.85 0.08 25);
+}
+
+.dark .login-error {
+  background: oklch(0.22 0.04 25);
+  border-color: oklch(0.35 0.1 25);
+}
+
+.login-error__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: oklch(0.6 0.2 25);
+  color: white;
+}
+
+.login-error__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.login-error__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: oklch(0.45 0.15 25);
+  margin-bottom: 0.25rem;
+}
+
+.dark .login-error__title {
+  color: oklch(0.8 0.12 25);
+}
+
+.login-error__msg {
+  font-size: 0.8125rem;
+  color: oklch(0.5 0.08 25);
+  line-height: 1.4;
+}
+
+.dark .login-error__msg {
+  color: oklch(0.7 0.06 25);
+}
+
+.login-error__msg strong {
+  word-break: break-all;
+}
+
+.login-error__close {
+  flex-shrink: 0;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  color: oklch(0.5 0.08 25);
+  cursor: pointer;
+  background: none;
+  border: none;
+  transition: background 0.15s;
+}
+
+.login-error__close:hover {
+  background: oklch(0.9 0.02 25);
+}
+
+.dark .login-error__close {
+  color: oklch(0.65 0.06 25);
+}
+
+.dark .login-error__close:hover {
+  background: oklch(0.28 0.04 25);
+}
+
+/* Error slide transition */
+.error-slide-enter-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.error-slide-leave-active {
+  transition: all 0.2s ease-in;
+}
+.error-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+}
+.error-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.99);
 }
 </style>
