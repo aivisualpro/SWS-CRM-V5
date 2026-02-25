@@ -28,13 +28,41 @@ function openEventDetail(evt: any) {
   showDetail.value = true
 }
 
+// ── User name lookup ─────────────────────────────────────────
+const userNameMap = ref<Record<string, string>>({})
+
+async function fetchUsers() {
+  try {
+    const data = await $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] }))
+    if (data.success) {
+      userNameMap.value = Object.fromEntries(
+        data.users
+          .filter((u: any) => u.Email)
+          .map((u: any) => [
+            u.Email.toLowerCase(),
+            [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
+          ]),
+      )
+    }
+  }
+  catch {}
+}
+
+function resolveName(email: string): string {
+  if (!email) return ''
+  return userNameMap.value[email.toLowerCase()] || email
+}
+
 // ── Fetch ────────────────────────────────────────────────────
 async function fetchEvents() {
   loading.value = true
   try {
-    const data = await $fetch<{ success: boolean, events: any[], count: number }>('/api/bigquery/events')
-    if (data.success) {
-      events.value = data.events.map((e: any) => ({
+    const [eventsData] = await Promise.all([
+      $fetch<{ success: boolean, events: any[], count: number }>('/api/bigquery/events'),
+      fetchUsers(),
+    ])
+    if (eventsData.success) {
+      events.value = eventsData.events.map((e: any) => ({
         ...e,
         _startDate: parseDate(e['Start Date']),
         _endDate: parseDate(e['End Date']),
@@ -537,7 +565,7 @@ const totalEventsThisMonth = computed(() => {
 
       <!-- ── Event Detail Modal ───────────────────────────────── -->
       <Dialog v-model:open="showDetail">
-        <DialogContent class="max-w-lg">
+        <DialogContent class="max-w-2xl">
           <DialogHeader>
             <DialogTitle class="flex items-center gap-2">
               <span
@@ -545,23 +573,23 @@ const totalEventsThisMonth = computed(() => {
                 :class="getEventColor(selectedEvent?.['Event Type']).dot"
               />
               {{ selectedEvent?.['Event Type'] || 'Event' }}
-              <Badge variant="outline" class="ml-auto text-[10px]">
-                {{ selectedEvent?.['Event Status'] }}
+              <Badge v-if="selectedEvent?.['Event Status']" variant="outline" class="ml-auto text-[10px]">
+                {{ selectedEvent['Event Status'] }}
               </Badge>
             </DialogTitle>
-            <DialogDescription>
-              {{ selectedEvent?.['Event Description'] || 'No description' }}
+            <DialogDescription v-if="selectedEvent?.['Event Description']">
+              {{ selectedEvent['Event Description'] }}
             </DialogDescription>
           </DialogHeader>
 
           <div v-if="selectedEvent" class="space-y-4 pt-2">
             <!-- Time -->
-            <div class="grid grid-cols-2 gap-3">
-              <div class="cal-detail-field">
+            <div class="grid grid-cols-2 gap-4">
+              <div v-if="selectedEvent._startDate" class="cal-detail-field">
                 <span class="cal-detail-label">Start</span>
                 <span class="cal-detail-value">{{ formatFullDateTime(selectedEvent._startDate) }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent._endDate" class="cal-detail-field">
                 <span class="cal-detail-label">End</span>
                 <span class="cal-detail-value">{{ formatFullDateTime(selectedEvent._endDate) }}</span>
               </div>
@@ -570,86 +598,104 @@ const totalEventsThisMonth = computed(() => {
             <Separator />
 
             <!-- Details grid -->
-            <div class="grid grid-cols-2 gap-3">
-              <div class="cal-detail-field">
+            <div class="grid grid-cols-3 gap-4">
+              <div v-if="selectedEvent['Event  ID']" class="cal-detail-field">
                 <span class="cal-detail-label">Event ID</span>
-                <span class="cal-detail-value font-mono text-xs">{{ selectedEvent['Event  ID'] || '—' }}</span>
+                <span class="cal-detail-value font-mono text-xs">{{ selectedEvent['Event  ID'] }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent['Project ID']" class="cal-detail-field">
                 <span class="cal-detail-label">Project ID</span>
-                <span class="cal-detail-value font-mono text-xs">{{ selectedEvent['Project ID'] || '—' }}</span>
+                <span class="cal-detail-value font-mono text-xs">{{ selectedEvent['Project ID'] }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent.Category" class="cal-detail-field">
                 <span class="cal-detail-label">Category</span>
-                <span class="cal-detail-value">{{ selectedEvent.Category || '—' }}</span>
+                <span class="cal-detail-value">{{ selectedEvent.Category }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent.Branch" class="cal-detail-field">
                 <span class="cal-detail-label">Branch</span>
-                <span class="cal-detail-value">{{ selectedEvent.Branch || '—' }}</span>
+                <span class="cal-detail-value">{{ selectedEvent.Branch }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent['Event Confirmed']" class="cal-detail-field">
                 <span class="cal-detail-label">Confirmed</span>
-                <span class="cal-detail-value">{{ selectedEvent['Event Confirmed'] || '—' }}</span>
+                <span class="cal-detail-value">{{ selectedEvent['Event Confirmed'] }}</span>
               </div>
-              <div class="cal-detail-field">
+              <div v-if="selectedEvent.Vendor" class="cal-detail-field">
                 <span class="cal-detail-label">Vendor</span>
-                <span class="cal-detail-value">{{ selectedEvent.Vendor || '—' }}</span>
+                <span class="cal-detail-value">{{ selectedEvent.Vendor }}</span>
               </div>
             </div>
-
-            <Separator />
 
             <!-- Address & contact -->
-            <div class="space-y-3">
-              <div class="cal-detail-field">
-                <span class="cal-detail-label">Address</span>
-                <span class="cal-detail-value text-xs">{{ selectedEvent['Customer Address'] || selectedEvent['Event Address'] || '—' }}</span>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="cal-detail-field">
+            <template v-if="selectedEvent['Customer Address'] || selectedEvent['Event Address'] || selectedEvent['Customer Phone'] || selectedEvent['Customer Email']">
+              <Separator />
+              <div class="grid grid-cols-3 gap-4">
+                <div v-if="selectedEvent['Customer Address'] || selectedEvent['Event Address']" class="cal-detail-field col-span-3">
+                  <span class="cal-detail-label">Address</span>
+                  <span class="cal-detail-value text-xs">{{ selectedEvent['Customer Address'] || selectedEvent['Event Address'] }}</span>
+                </div>
+                <div v-if="selectedEvent['Customer Phone']" class="cal-detail-field">
                   <span class="cal-detail-label">Phone</span>
-                  <span class="cal-detail-value text-xs">{{ selectedEvent['Customer Phone'] || '—' }}</span>
+                  <span class="cal-detail-value text-xs">{{ selectedEvent['Customer Phone'] }}</span>
                 </div>
-                <div class="cal-detail-field">
-                  <span class="cal-detail-label">Email</span>
-                  <span class="cal-detail-value text-xs truncate">{{ selectedEvent['Customer Email'] || '—' }}</span>
+                <div v-if="selectedEvent['Customer Mobile']" class="cal-detail-field">
+                  <span class="cal-detail-label">Mobile</span>
+                  <span class="cal-detail-value text-xs">{{ selectedEvent['Customer Mobile'] }}</span>
+                </div>
+                <div v-if="selectedEvent['Customer Email']" class="cal-detail-field">
+                  <span class="cal-detail-label">Customer</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent['Customer Email']) }}</span>
                 </div>
               </div>
-            </div>
+            </template>
 
             <!-- Crew -->
-            <Separator />
-            <div class="grid grid-cols-2 gap-3">
-              <div class="cal-detail-field">
-                <span class="cal-detail-label">Installers</span>
-                <span class="cal-detail-value text-xs">{{ selectedEvent.Installers || '—' }}</span>
+            <template v-if="selectedEvent.Installers || selectedEvent.Technicians || selectedEvent['SSA Technician'] || selectedEvent['Electrician Crew'] || selectedEvent['Troubleshooting Tech']">
+              <Separator />
+              <div class="grid grid-cols-3 gap-4">
+                <div v-if="selectedEvent.Installers" class="cal-detail-field">
+                  <span class="cal-detail-label">Installers</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent.Installers) }}</span>
+                </div>
+                <div v-if="selectedEvent.Technicians" class="cal-detail-field">
+                  <span class="cal-detail-label">Technicians</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent.Technicians) }}</span>
+                </div>
+                <div v-if="selectedEvent['SSA Technician']" class="cal-detail-field">
+                  <span class="cal-detail-label">SSA Technician</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent['SSA Technician']) }}</span>
+                </div>
+                <div v-if="selectedEvent['Electrician Crew']" class="cal-detail-field">
+                  <span class="cal-detail-label">Electrician Crew</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent['Electrician Crew']) }}</span>
+                </div>
+                <div v-if="selectedEvent['Troubleshooting Tech']" class="cal-detail-field">
+                  <span class="cal-detail-label">Troubleshooting Tech</span>
+                  <span class="cal-detail-value text-xs">{{ resolveName(selectedEvent['Troubleshooting Tech']) }}</span>
+                </div>
               </div>
-              <div class="cal-detail-field">
-                <span class="cal-detail-label">Technicians</span>
-                <span class="cal-detail-value text-xs">{{ selectedEvent.Technicians || '—' }}</span>
-              </div>
-              <div class="cal-detail-field">
-                <span class="cal-detail-label">SSA Tech</span>
-                <span class="cal-detail-value text-xs">{{ selectedEvent['SSA Technician'] || '—' }}</span>
-              </div>
-              <div class="cal-detail-field">
-                <span class="cal-detail-label">Electrician Crew</span>
-                <span class="cal-detail-value text-xs">{{ selectedEvent['Electrician Crew'] || '—' }}</span>
-              </div>
-            </div>
+            </template>
 
             <!-- Note -->
-            <div v-if="selectedEvent['Event Note']" class="mt-3">
-              <span class="cal-detail-label">Notes</span>
-              <div class="mt-1 p-3 rounded-lg bg-muted text-xs whitespace-pre-wrap leading-relaxed">
-                {{ selectedEvent['Event Note'] }}
+            <template v-if="selectedEvent['Event Note']">
+              <Separator />
+              <div>
+                <span class="cal-detail-label">Notes</span>
+                <div class="mt-1 p-3 rounded-lg bg-muted text-xs whitespace-pre-wrap leading-relaxed">
+                  {{ selectedEvent['Event Note'] }}
+                </div>
               </div>
+            </template>
+
+            <!-- Reason of Change -->
+            <div v-if="selectedEvent['Reason of Change']" class="cal-detail-field">
+              <span class="cal-detail-label">Reason of Change</span>
+              <span class="cal-detail-value text-xs">{{ selectedEvent['Reason of Change'] }}</span>
             </div>
 
             <!-- Created by -->
-            <div class="flex items-center justify-between pt-2 text-[11px] text-muted-foreground">
-              <span>Created by {{ selectedEvent['Create By'] || '—' }}</span>
-              <span>{{ selectedEvent['Secondary Summary'] || '' }}</span>
+            <div v-if="selectedEvent['Create By'] || selectedEvent['Secondary Summary']" class="flex items-center justify-between pt-2 text-[11px] text-muted-foreground border-t">
+              <span v-if="selectedEvent['Create By']">Created by {{ resolveName(selectedEvent['Create By']) }}</span>
+              <span v-if="selectedEvent['Secondary Summary']">{{ selectedEvent['Secondary Summary'] }}</span>
             </div>
           </div>
         </DialogContent>
