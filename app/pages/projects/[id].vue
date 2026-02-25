@@ -517,49 +517,14 @@ function onDragEnd() {
 
                   <!-- PROJECT FINANCE -->
                   <template v-else-if="card.id === 'project-finance'">
-                    <div v-if="financeLoading" class="flex items-center justify-center py-10"><Icon name="i-lucide-loader-2" class="size-5 animate-spin text-primary" /></div>
-                    <div v-else-if="financeRecords.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
-                      <Icon name="i-lucide-banknote" class="size-9 text-muted-foreground/15 mb-2" />
-                      <p class="text-xs text-muted-foreground/60">No finance records found</p>
-                    </div>
-                    <div v-else class="space-y-4">
-                      <div v-for="(fin, fIdx) in financeRecords" :key="fin['Record ID'] || fIdx" class="space-y-0">
-                        <div v-if="financeRecords.length > 1" class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <Icon name="i-lucide-hash" class="size-3" />
-                          Record {{ fIdx + 1 }}
-                        </div>
-                        <div class="divide-y divide-border/40">
-                          <div v-for="field in [
-                            { label: 'Finance Company', value: fin['Finance Company'] },
-                            { label: 'Finance Type', value: fin['Finance Type'] },
-                            { label: 'Loan ID', value: fin['Loan ID'] },
-                            { label: 'Loan Amount', value: fin['Loan Amount'] ? formatCurrency(fin['Loan Amount']) : null },
-                            { label: 'DF', value: fin['DF'] != null ? `${fin['DF']}%` : null },
-                            { label: 'Dealer Amount', value: fin['Dealer Amount'] ? formatCurrency(fin['Dealer Amount']) : null },
-                            { label: 'Net Loan Amount', value: fin['Net Loan Amount'] ? formatCurrency(fin['Net Loan Amount']) : null },
-                            { label: 'Finance Terms', value: fin['Finance Terms'] },
-                            { label: '1st Payment', value: fin['First Monthly Payment'] ? formatCurrency(fin['First Monthly Payment']) : null },
-                            { label: '2nd Payment', value: fin['Second Monthly Payment'] ? formatCurrency(fin['Second Monthly Payment']) : null },
-                            { label: 'RTF', value: fin['RTF'] },
-                            { label: 'Finance Status', value: fin['Finance Status'], isStatus: true },
-                            { label: 'Fund Date', value: fin['Fund Date'] ? formatDate(fin['Fund Date']) : null },
-                            { label: 'Fund Note', value: fin['Fund Note'] },
-                            { label: 'Money RCVD', value: fin['Money RCVD'] },
-                            { label: 'Loan Approve', value: fin['Loan Approve'] ? formatDate(fin['Loan Approve']) : null },
-                            { label: 'Loan Signed', value: fin['Loan Signed'] ? formatDate(fin['Loan Signed']) : null },
-                            { label: 'Loan Expired', value: fin['Loan Expired'] ? formatDate(fin['Loan Expired']) : null },
-                            { label: 'NTP', value: fin['NTP'] ? formatDate(fin['NTP']) : null },
-                            { label: 'PTO Expire', value: fin['PTO Expire'] ? formatDate(fin['PTO Expire']) : null },
-                            { label: 'PTO Uploaded', value: fin['PTO Uploaded'] ? formatDate(fin['PTO Uploaded']) : null },
-                            { label: 'Created By', value: fin['Create By'] ? resolveName(fin['Create By']) : null },
-                          ].filter(f => f.value != null && f.value !== '' && f.value !== '—' && f.value !== '$0' && f.value !== '0%')" :key="field.label" class="flex items-center justify-between py-2 px-1 hover:bg-muted/30 rounded transition-colors">
-                            <span class="text-xs text-muted-foreground font-medium">{{ field.label }}</span>
-                            <Badge v-if="field.isStatus" variant="outline" :class="statusColor(String(field.value))" class="text-[10px]">{{ field.value }}</Badge>
-                            <span v-else class="text-xs font-semibold text-right max-w-[55%] truncate">{{ field.value }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <FinancesTable
+                      :records="financeRecords"
+                      :loading="financeLoading"
+                      :user-name-map="userNameMap"
+                      :show-project="false"
+                      :compact="true"
+                      :per-page="10"
+                    />
                   </template>
 
                   <!-- CHAT ROOM -->
