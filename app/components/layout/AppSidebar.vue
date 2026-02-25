@@ -38,15 +38,13 @@ const teams: {
   },
 ]
 
-const user: {
-  name: string
-  email: string
-  avatar: string
-} = {
-  name: 'Adeel Jabbar',
-  email: 'adeel@aivisualpro.com',
-  avatar: '/avatars/adeel.png',
-}
+const { user: authUser } = useAuth()
+
+const user = computed(() => ({
+  name: authUser.value?.name || 'User',
+  email: authUser.value?.email || '',
+  avatar: authUser.value?.picture || '/avatars/default.png',
+}))
 
 const { sidebar } = useAppSettings()
 </script>

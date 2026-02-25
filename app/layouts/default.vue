@@ -7,7 +7,7 @@
     <SidebarInset>
       <LayoutHeader />
       <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
-        <div class="@container/main grow">
+        <div class="@container/main grow p-4">
           <slot />
         </div>
       </div>

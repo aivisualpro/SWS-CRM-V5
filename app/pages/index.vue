@@ -38,10 +38,12 @@ setHeader({ titleKey: 'dashboard.title', icon: 'i-lucide-layout-dashboard', desc
 
 <template>
   <div class="w-full flex flex-col gap-4">
-    <div class="flex items-center justify-end gap-2">
+    <!-- Teleport date picker & download to header toolbar -->
+    <Teleport to="#header-toolbar">
       <BaseDateRangePicker />
       <Button>{{ t('dashboard.download') }}</Button>
-    </div>
+    </Teleport>
+
     <main class="@container/main flex flex-1 flex-col gap-4 md:gap-8">
       <div class="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         <Card class="@container/card">

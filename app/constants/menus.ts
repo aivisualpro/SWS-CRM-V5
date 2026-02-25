@@ -35,12 +35,6 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-users',
         link: '/customers',
       },
-      {
-        title: 'Email',
-        titleKey: 'nav.email',
-        icon: 'i-lucide-mail',
-        link: '/email',
-      },
     ],
   },
   {
@@ -54,22 +48,15 @@ export const navMenu: NavMenu[] = [
         link: '/projects/all-projects',
       },
       {
+        title: 'Events',
+        icon: 'i-lucide-calendar-days',
+        link: '/events/calendar',
+      },
+      {
         title: 'Tasks',
         titleKey: 'nav.tasks',
         icon: 'i-lucide-calendar-check-2',
         link: '/tasks',
-      },
-      {
-        title: 'Timesheets',
-        titleKey: 'nav.timesheets',
-        icon: 'i-lucide-timer',
-        link: '/projects/timesheets',
-      },
-      {
-        title: 'Milestones',
-        titleKey: 'nav.milestones',
-        icon: 'i-lucide-flag',
-        link: '/projects/milestones',
       },
     ],
   },
@@ -92,140 +79,14 @@ export const navMenu: NavMenu[] = [
     ],
   },
   {
-    heading: 'CRM',
-    headingKey: 'nav.crm',
-    items: [
-      {
-        title: 'Contacts',
-        titleKey: 'nav.contacts',
-        icon: 'i-lucide-contact',
-        link: '/crm/contacts',
-      },
-      {
-        title: 'Leads',
-        titleKey: 'nav.leads',
-        icon: 'i-lucide-magnet',
-        link: '/crm/leads',
-      },
-      {
-        title: 'Deals Pipeline',
-        titleKey: 'nav.dealsPipeline',
-        icon: 'i-lucide-handshake',
-        link: '/crm/deals',
-      },
-      {
-        title: 'Companies',
-        titleKey: 'nav.companies',
-        icon: 'i-lucide-building-2',
-        link: '/crm/companies',
-      },
-      {
-        title: 'Activities',
-        titleKey: 'nav.activities',
-        icon: 'i-lucide-activity',
-        link: '/crm/activities',
-      },
-    ],
-  },
-  {
     heading: 'Sales & Commerce',
     headingKey: 'nav.salesCommerce',
     items: [
-      {
-        title: 'Quotes',
-        titleKey: 'nav.quotes',
-        icon: 'i-lucide-file-text',
-        link: '/sales/quotes',
-      },
       {
         title: 'Invoices',
         titleKey: 'nav.invoices',
         icon: 'i-lucide-receipt',
         link: '/sales/invoices',
-      },
-      {
-        title: 'Orders',
-        titleKey: 'nav.orders',
-        icon: 'i-lucide-shopping-cart',
-        link: '/sales/orders',
-      },
-      {
-        title: 'Products',
-        titleKey: 'nav.products',
-        icon: 'i-lucide-package',
-        link: '/sales/products',
-      },
-      {
-        title: 'Customers',
-        titleKey: 'nav.customers',
-        icon: 'i-lucide-users',
-        link: '/sales/customers',
-      },
-    ],
-  },
-  {
-    heading: 'Inventory & Warehouse',
-    headingKey: 'nav.inventoryWarehouse',
-    items: [
-      {
-        title: 'Stock Overview',
-        titleKey: 'nav.stockOverview',
-        icon: 'i-lucide-warehouse',
-        link: '/inventory/stock',
-      },
-      {
-        title: 'Transfers',
-        titleKey: 'nav.transfers',
-        icon: 'i-lucide-arrow-left-right',
-        link: '/inventory/transfers',
-      },
-      {
-        title: 'Purchase Orders',
-        titleKey: 'nav.purchaseOrders',
-        icon: 'i-lucide-clipboard-list',
-        link: '/inventory/purchase-orders',
-      },
-      {
-        title: 'Vendors',
-        titleKey: 'nav.vendors',
-        icon: 'i-lucide-truck',
-        link: '/inventory/vendors',
-      },
-    ],
-  },
-  {
-    heading: 'HR & Workforce',
-    headingKey: 'nav.hrWorkforce',
-    items: [
-      {
-        title: 'Employees',
-        titleKey: 'nav.employees',
-        icon: 'i-lucide-user-round-check',
-        link: '/hr/employees',
-      },
-      {
-        title: 'Attendance',
-        titleKey: 'nav.attendance',
-        icon: 'i-lucide-clock',
-        link: '/hr/attendance',
-      },
-      {
-        title: 'Payroll',
-        titleKey: 'nav.payroll',
-        icon: 'i-lucide-banknote',
-        link: '/hr/payroll',
-      },
-      {
-        title: 'Recruitment',
-        titleKey: 'nav.recruitment',
-        icon: 'i-lucide-briefcase',
-        link: '/hr/recruitment',
-      },
-      {
-        title: 'Leave Mgmt',
-        titleKey: 'nav.leaveMgmt',
-        icon: 'i-lucide-calendar-off',
-        link: '/hr/leaves',
       },
     ],
   },
@@ -305,30 +166,6 @@ export const navMenu: NavMenu[] = [
         titleKey: 'nav.liveChat',
         icon: 'i-lucide-message-circle',
         link: '/support/chat',
-      },
-    ],
-  },
-  {
-    heading: 'Marketing',
-    headingKey: 'nav.marketing',
-    items: [
-      {
-        title: 'Campaigns',
-        titleKey: 'nav.campaigns',
-        icon: 'i-lucide-megaphone',
-        link: '/marketing/campaigns',
-      },
-      {
-        title: 'Email Blasts',
-        titleKey: 'nav.emailBlasts',
-        icon: 'i-lucide-mails',
-        link: '/marketing/email-blasts',
-      },
-      {
-        title: 'Analytics',
-        titleKey: 'nav.analytics',
-        icon: 'i-lucide-bar-chart-3',
-        link: '/marketing/analytics',
       },
     ],
   },

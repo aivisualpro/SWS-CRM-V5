@@ -10,9 +10,10 @@ defineProps<{
 }>()
 
 const { isMobile, setOpenMobile } = useSidebar()
+const { logout } = useAuth()
 
 function handleLogout() {
-  navigateTo('/login')
+  logout()
 }
 
 const showModalTheme = ref(false)
@@ -59,13 +60,6 @@ const showModalTheme = ref(false)
               </div>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem>
-              <Icon name="i-lucide-sparkles" />
-              Upgrade to Pro
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem>
