@@ -4,49 +4,17 @@ import NumberFlow from '@number-flow/vue'
 const { setHeader } = usePageHeader()
 setHeader({ title: 'Home', icon: 'i-lucide-layout-dashboard', description: 'Overview of your solar operations' })
 
-// ─── State ──────────────────────────────────────────────────
-const loading = ref(true)
-const projects = ref<any[]>([])
-const events = ref<any[]>([])
-const userNameMap = ref<Record<string, string>>({})
-const customerNameMap = ref<Record<string, string>>({})
+// ─── Use the global prefetched data store ───────────────────
+const {
+  projects,
+  events,
+  userNameMap,
+  customerNameMap,
+  init,
+} = useDashboardStore()
 
-// ─── Fetch all data in parallel ─────────────────────────────
-async function fetchDashboard() {
-  loading.value = true
-  try {
-    const [projData, eventData, userData, custData] = await Promise.all([
-      $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/projects').catch(() => ({ success: false, projects: [] })),
-      $fetch<{ success: boolean, events: any[] }>('/api/bigquery/events').catch(() => ({ success: false, events: [] })),
-      $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
-      $fetch<{ success: boolean, customers: any[] }>('/api/bigquery/customers').catch(() => ({ success: false, customers: [] })),
-    ])
-    if (projData.success) projects.value = projData.projects
-    if (eventData.success) events.value = eventData.events
-    if (userData.success) {
-      userNameMap.value = Object.fromEntries(
-        userData.users.filter((u: any) => u.Email).map((u: any) => [
-          u.Email.toLowerCase(),
-          [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
-        ]),
-      )
-    }
-    if (custData.success) {
-      customerNameMap.value = Object.fromEntries(
-        custData.customers.filter((c: any) => c['Customer ID']).map((c: any) => [
-          c['Customer ID'],
-          [c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID'],
-        ]),
-      )
-    }
-  }
-  catch {}
-  finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchDashboard)
+// Ensure store is initialized (in case plugin hasn't run yet)
+init()
 
 // ─── Helpers ────────────────────────────────────────────────
 function parsePrice(val: any): number {
@@ -218,13 +186,6 @@ const eventColors: Record<string, string> = {
   <div class="w-full flex-1 min-h-0 overflow-auto">
     <div class="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
 
-      <!-- Loading -->
-      <div v-if="loading" class="flex flex-col items-center justify-center py-24 gap-3">
-        <Icon name="i-lucide-loader-2" class="size-8 animate-spin text-primary" />
-        <p class="text-sm text-muted-foreground">Loading dashboard…</p>
-      </div>
-
-      <template v-else>
 
         <!-- ═══ MAIN GRID ═══ -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -442,7 +403,6 @@ const eventColors: Record<string, string> = {
           </div>
         </div>
 
-      </template>
     </div>
   </div>
 </template>

@@ -20,6 +20,8 @@ const props = withDefaults(defineProps<{
   showProject?: boolean
   compact?: boolean
   perPage?: number
+  hideSearch?: boolean
+  searchQuery?: string
 }>(), {
   loading: false,
   userNameMap: () => ({}),
@@ -27,6 +29,8 @@ const props = withDefaults(defineProps<{
   showProject: true,
   compact: false,
   perPage: 50,
+  hideSearch: false,
+  searchQuery: '',
 })
 
 // ─── Search & Sort ──────────────────────────────────────────
@@ -104,9 +108,11 @@ const columns = computed(() => {
 })
 
 // ─── Filter, Sort, Paginate ─────────────────────────────────
+const effectiveSearch = computed(() => props.searchQuery || search.value)
+
 const filtered = computed(() => {
-  if (!search.value.trim()) return props.records
-  const q = search.value.toLowerCase()
+  if (!effectiveSearch.value.trim()) return props.records
+  const q = effectiveSearch.value.toLowerCase()
   return props.records.filter(r =>
     (r['Project ID'] || '').toLowerCase().includes(q)
     || (r['Finance Company'] || '').toLowerCase().includes(q)
@@ -173,8 +179,8 @@ function cellValue(rec: any, col: { key: string }): string {
 
     <!-- Table -->
     <div v-else class="flex flex-col h-full">
-      <!-- Search (compact mode has inline search) -->
-      <div v-if="compact && records.length > 1" class="px-1 pb-2 shrink-0">
+      <!-- Search (compact mode has inline search, unless hidden by parent) -->
+      <div v-if="compact && records.length > 1 && !hideSearch" class="px-1 pb-2 shrink-0">
         <div class="relative">
           <Icon name="i-lucide-search" class="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/40" />
           <input

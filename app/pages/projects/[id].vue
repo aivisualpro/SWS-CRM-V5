@@ -12,6 +12,7 @@ const project = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
 const isMounted = ref(false)
+const globalSearch = ref('')
 onMounted(() => { isMounted.value = true })
 
 // Chat
@@ -379,6 +380,47 @@ function onDragEnd() {
   draggedCardId.value = null
   dragOverCardId.value = null
 }
+// ─── Global Search ──────────────────────────────────────────
+function highlightText(text: string): string {
+  if (!globalSearch.value.trim() || !text) return text
+  const q = globalSearch.value.trim()
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  return String(text).replace(regex, '<mark class="search-highlight">$1</mark>')
+}
+
+function textMatches(text: string): boolean {
+  if (!globalSearch.value.trim() || !text) return false
+  return String(text).toLowerCase().includes(globalSearch.value.trim().toLowerCase())
+}
+
+function cardHasMatch(cardId: string): boolean {
+  const q = globalSearch.value.trim().toLowerCase()
+  if (!q) return false
+
+  if (cardId === 'project-info') {
+    return projectInfoFields.value.some(f => textMatches(f.label) || textMatches(f.value))
+  }
+  if (cardId === 'production-info') {
+    return productionFields.value.some(f => textMatches(f.label) || textMatches(f.value))
+  }
+  if (cardId === 'project-finance') {
+    return financeRecords.value.some((r: any) =>
+      Object.values(r).some(v => textMatches(String(v ?? '')))
+    )
+  }
+  if (cardId === 'chat-room') {
+    return chatMessages.value.some((msg: any) =>
+      textMatches(msg.Chat) || textMatches(msg.Email) || textMatches(resolveName(msg.Email))
+    )
+  }
+  if (cardId === 'events') {
+    return projectEvents.value.some((evt: any) =>
+      textMatches(evt['Event Type']) || textMatches(evt['Event Description']) || textMatches(evt['Event Status'])
+    )
+  }
+  return false
+}
 </script>
 
 <template>
@@ -403,6 +445,22 @@ function onDragEnd() {
             <template v-for="js in jobStatuses" :key="js">
               <Badge variant="outline" :class="statusColor(js)" class="text-[10px] shrink-0">{{ js }}</Badge>
             </template>
+          </div>
+          <!-- Global Search -->
+          <div class="relative shrink-0 ml-2">
+            <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50 pointer-events-none" />
+            <input
+              v-model="globalSearch"
+              placeholder="Search cards…"
+              class="global-search-input"
+            />
+            <button
+              v-if="globalSearch"
+              class="absolute right-2 top-1/2 -translate-y-1/2 size-3.5 rounded-full bg-muted-foreground/15 flex items-center justify-center hover:bg-muted-foreground/25 transition-colors"
+              @click="globalSearch = ''"
+            >
+              <Icon name="i-lucide-x" class="size-2" />
+            </button>
           </div>
         </div>
       </Teleport>
@@ -444,6 +502,8 @@ function onDragEnd() {
               :class="{
                 'is-dragging': draggedCardId === card.id,
                 'is-drag-over': dragOverCardId === card.id && draggedCardId !== card.id,
+                'has-search-match': cardHasMatch(card.id),
+                'no-search-match': globalSearch.trim() && !cardHasMatch(card.id),
               }"
               :style="{ gridColumn: `span ${gridColSpan(card.id)}` }"
               @dragover="onCardDragOver(card.id, $event)"
@@ -489,9 +549,9 @@ function onDragEnd() {
                   <!-- PROJECT INFO -->
                   <template v-if="card.id === 'project-info'">
                     <div class="divide-y divide-border/40">
-                      <div v-for="field in projectInfoFields" :key="field.label" class="flex items-center justify-between py-2 px-1 hover:bg-muted/30 rounded transition-colors">
-                        <span class="text-xs text-muted-foreground font-medium">{{ field.label }}</span>
-                        <span class="text-xs font-semibold text-right max-w-[55%] truncate">{{ field.value }}</span>
+                      <div v-for="field in projectInfoFields" :key="field.label" class="flex items-center justify-between py-2 px-1 hover:bg-muted/30 rounded transition-colors" :class="{ 'search-row-match': textMatches(field.label) || textMatches(field.value) }">
+                        <span class="text-xs text-muted-foreground font-medium" v-html="highlightText(field.label)" />
+                        <span class="text-xs font-semibold text-right max-w-[55%] truncate" v-html="highlightText(field.value)" />
                       </div>
                     </div>
                   </template>
@@ -499,10 +559,10 @@ function onDragEnd() {
                   <!-- PRODUCTION INFO -->
                   <template v-else-if="card.id === 'production-info'">
                     <div class="divide-y divide-border/40">
-                      <div v-for="field in productionFields" :key="field.label" class="flex items-center justify-between py-2 px-1 hover:bg-muted/30 rounded transition-colors">
-                        <span class="text-xs text-muted-foreground font-medium">{{ field.label }}</span>
-                        <Badge v-if="field.isStatus" variant="outline" :class="statusColor(field.value)" class="text-[10px]">{{ field.value }}</Badge>
-                        <span v-else class="text-xs font-semibold text-right max-w-[55%] truncate">{{ field.value }}</span>
+                      <div v-for="field in productionFields" :key="field.label" class="flex items-center justify-between py-2 px-1 hover:bg-muted/30 rounded transition-colors" :class="{ 'search-row-match': textMatches(field.label) || textMatches(field.value) }">
+                        <span class="text-xs text-muted-foreground font-medium" v-html="highlightText(field.label)" />
+                        <Badge v-if="field.isStatus" variant="outline" :class="statusColor(field.value)" class="text-[10px]"><span v-html="highlightText(field.value)" /></Badge>
+                        <span v-else class="text-xs font-semibold text-right max-w-[55%] truncate" v-html="highlightText(field.value)" />
                       </div>
                     </div>
                   </template>
@@ -524,6 +584,8 @@ function onDragEnd() {
                       :show-project="false"
                       :compact="true"
                       :per-page="10"
+                      :hide-search="true"
+                      :search-query="globalSearch"
                     />
                   </template>
 
@@ -553,9 +615,9 @@ function onDragEnd() {
                               </Avatar>
                               <div v-else class="w-5 shrink-0" />
                               <div class="max-w-[80%]">
-                                <div v-if="idx === 0 || activeConversation.messages[idx - 1]?.Email !== msg.Email" class="pl-0.5 pb-0.5"><span class="text-[9px] font-semibold">{{ resolveName(msg.Email) }}</span></div>
-                                <div class="rounded-lg px-2.5 py-1 text-[11px] leading-relaxed bg-muted/70 border border-border/30">
-                                  <template v-if="msg.Chat">{{ msg.Chat }}</template>
+                                <div v-if="idx === 0 || activeConversation.messages[idx - 1]?.Email !== msg.Email" class="pl-0.5 pb-0.5"><span class="text-[9px] font-semibold" v-html="highlightText(resolveName(msg.Email))" /></div>
+                                <div class="rounded-lg px-2.5 py-1 text-[11px] leading-relaxed border border-border/30" :class="textMatches(msg.Chat) ? 'bg-primary/5 border-primary/20' : 'bg-muted/70'">
+                                  <span v-if="msg.Chat" v-html="highlightText(msg.Chat)" />
                                   <div class="flex justify-end mt-0.5 -mb-0.5"><span class="text-[7px] text-muted-foreground/50">{{ chatFormatTime(msg._date) }}</span></div>
                                 </div>
                               </div>
@@ -582,16 +644,16 @@ function onDragEnd() {
                       <p class="text-xs text-muted-foreground/60">No events found</p>
                     </div>
                     <div v-else class="space-y-2">
-                      <div v-for="evt in projectEvents" :key="evt['Event  ID']" class="p-2.5 rounded-lg border hover:bg-muted/30 transition-all">
+                      <div v-for="evt in projectEvents" :key="evt['Event  ID']" class="p-2.5 rounded-lg border transition-all" :class="textMatches(evt['Event Type']) || textMatches(evt['Event Description']) || textMatches(evt['Event Status']) ? 'bg-primary/5 border-primary/20' : 'hover:bg-muted/30'">
                         <div class="flex items-start gap-2">
                           <div class="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" :class="statusColor(evt['Event Status'])">
                             <Icon :name="eventStatusIcon(evt['Event Status'])" class="size-3.5" />
                           </div>
                           <div class="min-w-0 flex-1">
-                            <p class="text-xs font-semibold truncate">{{ evt['Event Type'] || 'Event' }}</p>
-                            <p v-if="evt['Event Description']" class="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">{{ evt['Event Description'] }}</p>
+                            <p class="text-xs font-semibold truncate" v-html="highlightText(evt['Event Type'] || 'Event')" />
+                            <p v-if="evt['Event Description']" class="text-[10px] text-muted-foreground line-clamp-2 mt-0.5" v-html="highlightText(evt['Event Description'])" />
                             <div class="flex items-center gap-2 mt-1 flex-wrap">
-                              <Badge v-if="evt['Event Status']" variant="outline" :class="statusColor(evt['Event Status'])" class="text-[9px]">{{ evt['Event Status'] }}</Badge>
+                              <Badge v-if="evt['Event Status']" variant="outline" :class="statusColor(evt['Event Status'])" class="text-[9px]"><span v-html="highlightText(evt['Event Status'])" /></Badge>
                               <span v-if="evt['Start Date']" class="text-[9px] text-muted-foreground flex items-center gap-0.5"><Icon name="i-lucide-calendar" class="size-2.5" /> {{ formatDate(evt['Start Date']) }}</span>
                             </div>
                           </div>
@@ -642,6 +704,7 @@ function onDragEnd() {
   position: relative;
   user-select: text;
   -webkit-user-select: text;
+  align-self: start;
 }
 
 .dashboard-card:hover {
@@ -681,7 +744,6 @@ function onDragEnd() {
   height: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
 }
 
 .card-header-bar {
@@ -805,5 +867,73 @@ function onDragEnd() {
 @keyframes cardIn {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── Global Search Input ────────────────────────────────── */
+.global-search-input {
+  width: 200px;
+  height: 32px;
+  padding: 0 28px 0 30px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background) / 0.8);
+  color: hsl(var(--foreground));
+  outline: none;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+.global-search-input::placeholder {
+  color: hsl(var(--muted-foreground) / 0.4);
+}
+.global-search-input:focus {
+  width: 260px;
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), 0 2px 8px hsl(var(--primary) / 0.08);
+  background: hsl(var(--background));
+}
+
+/* ─── Search Highlight Mark ──────────────────────────────── */
+:deep(.search-highlight),
+.search-highlight {
+  background: #fbbf24 !important;
+  color: #1a1a1a !important;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4), 0 1px 4px rgba(251, 191, 36, 0.3);
+  text-decoration: none;
+  display: inline;
+  line-height: 1.4;
+}
+
+/* ─── Card Search Match States ───────────────────────────── */
+.dashboard-card.has-search-match {
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15), 0 4px 16px -2px hsl(var(--primary) / 0.1);
+  animation: matchPulse 2s ease-in-out infinite;
+}
+.dashboard-card.has-search-match .card-accent {
+  height: 4px;
+  box-shadow: 0 1px 6px hsl(var(--primary) / 0.3);
+}
+
+.dashboard-card.no-search-match {
+  opacity: 0.35;
+  transform: scale(0.985);
+  filter: grayscale(0.3);
+}
+
+@keyframes matchPulse {
+  0%, 100% { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15), 0 4px 16px -2px hsl(var(--primary) / 0.1); }
+  50% { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25), 0 6px 24px -2px hsl(var(--primary) / 0.18); }
+}
+
+/* ─── Row-level Match Highlight ──────────────────────────── */
+.search-row-match {
+  background: hsl(var(--primary) / 0.06) !important;
+  border-left: 2px solid hsl(var(--primary) / 0.4);
+  padding-left: 8px !important;
+  border-radius: 4px;
 }
 </style>
