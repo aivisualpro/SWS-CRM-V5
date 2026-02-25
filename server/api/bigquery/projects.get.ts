@@ -6,10 +6,10 @@
  */
 
 let _cache: { data: any[], timestamp: number } | null = null
-const CACHE_TTL = 60_000 // 60 seconds
+const CACHE_TTL = 300_000 // 5 minutes
 
 const COLUMNS = [
-  'Project ID', 'Customer name', 'Customer Address', 'City', 'Zip Code',
+  'Project ID', 'Customer name', 'Customer Address',
   'Branch Name', 'Project Folder', 'Vendor Name', 'Project Type', 'Job Status',
   'Project Status', 'Project Manager', 'Project Manager VA',
   'Finance Manager', 'Finance Manager VA', 'Engineer',

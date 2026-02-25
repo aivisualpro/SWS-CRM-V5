@@ -18,7 +18,7 @@ const tabs = [
 </script>
 
 <template>
-  <div class="w-full h-full flex min-h-0">
+  <div class="w-full flex-1 min-h-0 flex">
     <!-- Sub-sidebar -->
     <div class="w-[220px] shrink-0 border-r bg-card/50 flex flex-col min-h-0 overflow-y-auto">
       <nav class="flex flex-col gap-0.5 p-2">

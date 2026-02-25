@@ -11,6 +11,7 @@ const error = ref('')
 const search = ref('')
 const CHUNK_SIZE = 30
 const visibleCount = ref(CHUNK_SIZE)
+const activeFilter = ref('')
 
 // CRUD state
 const showDialog = ref(false)
@@ -60,11 +61,24 @@ async function fetchCustomers() {
   loading.value = true
   error.value = ''
   try {
-    const [customerData, userData] = await Promise.all([
-      $fetch<{ success: boolean, customers: any[], count: number }>('/api/bigquery/customers'),
-      $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
-    ])
+    const customerData = await $fetch<{ success: boolean, customers: any[], count: number }>('/api/bigquery/customers')
     if (customerData.success) customers.value = customerData.customers
+  }
+  catch (e: any) {
+    error.value = e.data?.statusMessage || e.message || 'Failed to load customers'
+    toast.error('Failed to load customers from BigQuery')
+  }
+  finally {
+    loading.value = false
+  }
+
+  // Load user names in background
+  loadUserNames()
+}
+
+async function loadUserNames() {
+  try {
+    const userData = await $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users')
     if (userData.success) {
       userNameMap.value = Object.fromEntries(
         userData.users
@@ -76,13 +90,7 @@ async function fetchCustomers() {
       )
     }
   }
-  catch (e: any) {
-    error.value = e.data?.statusMessage || e.message || 'Failed to load customers'
-    toast.error('Failed to load customers from BigQuery')
-  }
-  finally {
-    loading.value = false
-  }
+  catch {}
 }
 
 onMounted(fetchCustomers)
@@ -191,12 +199,65 @@ function sortIcon(col: string) {
   return sortDir.value === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'
 }
 
+// ─── Date filter helpers ────────────────────────────────────
+function getDateRange(filter: string): { start: Date, end: Date } | null {
+  if (!filter) return null
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const day = now.getDay()
+
+  switch (filter) {
+    case 'this-week': {
+      const start = new Date(now)
+      start.setDate(now.getDate() - day)
+      start.setHours(0, 0, 0, 0)
+      return { start, end: now }
+    }
+    case 'this-month':
+      return { start: new Date(year, month, 1), end: now }
+    case 'last-month':
+      return { start: new Date(year, month - 1, 1), end: new Date(year, month, 0, 23, 59, 59) }
+    case 'this-quarter': {
+      const qStart = Math.floor(month / 3) * 3
+      return { start: new Date(year, qStart, 1), end: now }
+    }
+    case 'this-year':
+      return { start: new Date(year, 0, 1), end: now }
+    case 'last-year':
+      return { start: new Date(year - 1, 0, 1), end: new Date(year - 1, 11, 31, 23, 59, 59) }
+    default:
+      return null
+  }
+}
+
+function parseTimestamp(val: any): Date | null {
+  if (!val) return null
+  try {
+    const v = val?.value || val
+    const d = new Date(v)
+    return isNaN(d.getTime()) ? null : d
+  }
+  catch { return null }
+}
+
 // ─── Computed ───────────────────────────────────────────────
-const filteredCustomers = computed(() => {
-  if (!search.value)
-    return customers.value
-  const q = search.value.toLowerCase()
+const dateFilteredCustomers = computed(() => {
+  const range = getDateRange(activeFilter.value)
+  if (!range) return customers.value
+
   return customers.value.filter((c: any) => {
+    const d = parseTimestamp(c.TimeStamp)
+    if (!d) return false
+    return d >= range.start && d <= range.end
+  })
+})
+
+const filteredCustomers = computed(() => {
+  if (!search.value) return dateFilteredCustomers.value
+  const q = search.value.toLowerCase()
+  return dateFilteredCustomers.value.filter((c: any) => {
     const fullName = [c['First Name'], c['Last Name']].filter(Boolean).join(' ')
     const secondaryFullName = [c['Secondary Name'], c['Secondary Last Name']].filter(Boolean).join(' ')
     const allValues = [...Object.values(c), fullName, secondaryFullName].filter(Boolean)
@@ -244,6 +305,7 @@ const visibleCustomers = computed(() => sortedCustomers.value.slice(0, visibleCo
 const hasMore = computed(() => visibleCount.value < sortedCustomers.value.length)
 
 watch(search, () => { visibleCount.value = CHUNK_SIZE })
+watch(activeFilter, () => { visibleCount.value = CHUNK_SIZE })
 
 // Infinite scroll
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -278,17 +340,9 @@ function formatDate(value: any): string {
 
 function formatPhone(value?: string): string {
   if (!value) return '—'
-  // Strip all non-digit characters
   const digits = value.replace(/\D/g, '')
-  // Handle 10-digit numbers
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
-  }
-  // Handle 11-digit (1 + 10)
-  if (digits.length === 11 && digits[0] === '1') {
-    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
-  }
-  // Return original if not standard US format
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  if (digits.length === 11 && digits[0] === '1') return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
   return value
 }
 
@@ -298,56 +352,56 @@ function getFullName(c: any): string {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col min-h-0">
-    <!-- Teleport search + actions to header -->
-    <Teleport v-if="isMounted" to="#header-toolbar">
-      <div class="flex items-center gap-2 w-full justify-end">
-        <div class="relative max-w-[220px]">
-          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input v-model="search" placeholder="Search customers..." class="pl-8 h-8 text-sm" />
+  <CustomersLayout v-model:active-filter="activeFilter">
+    <div class="w-full flex-1 flex flex-col min-h-0">
+      <!-- Teleport search + actions to header -->
+      <Teleport v-if="isMounted" to="#header-toolbar">
+        <div class="flex items-center gap-2 w-full justify-end">
+          <div class="relative max-w-[220px]">
+            <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input v-model="search" placeholder="Search customers..." class="pl-8 h-8 text-sm" />
+          </div>
+          <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
+            {{ filteredCustomers.length }} record{{ filteredCustomers.length !== 1 ? 's' : '' }}
+          </p>
+          <Button variant="ghost" size="sm" class="h-8" @click="fetchCustomers">
+            <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
+          </Button>
+          <Button size="sm" class="h-8" @click="openCreate">
+            <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
+            Add Customer
+          </Button>
         </div>
-        <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
-          {{ filteredCustomers.length }} record{{ filteredCustomers.length !== 1 ? 's' : '' }}
-        </p>
-        <Button variant="ghost" size="sm" class="h-8" @click="fetchCustomers">
-          <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
-        </Button>
-        <Button size="sm" class="h-8" @click="openCreate">
-          <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
-          Add Customer
-        </Button>
-      </div>
-    </Teleport>
+      </Teleport>
 
-    <!-- Error State -->
-    <Card v-if="error" class="border-destructive p-6">
-      <div class="flex flex-col items-center gap-3 text-center">
-        <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
-        <p class="font-medium text-destructive">{{ error }}</p>
-        <Button size="sm" variant="outline" @click="fetchCustomers">
-          <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
-          Retry
-        </Button>
-      </div>
-    </Card>
+      <!-- Error State -->
+      <Card v-if="error" class="border-destructive p-6">
+        <div class="flex flex-col items-center gap-3 text-center">
+          <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
+          <p class="font-medium text-destructive">{{ error }}</p>
+          <Button size="sm" variant="outline" @click="fetchCustomers">
+            <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
+            Retry
+          </Button>
+        </div>
+      </Card>
 
-    <!-- Loading Skeleton -->
-    <Card v-else-if="loading" class="p-6">
-      <div class="space-y-4">
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-3/4" />
-      </div>
-    </Card>
+      <!-- Loading Skeleton -->
+      <Card v-else-if="loading" class="p-6">
+        <div class="space-y-4">
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-3/4" />
+        </div>
+      </Card>
 
-    <!-- Data Table with ALL fields -->
-    <div v-else class="flex-1 min-h-0 flex flex-col rounded-xl border shadow-sm bg-card overflow-hidden">
-      <div class="overflow-auto flex-1 min-h-0">
+      <!-- Data Table -->
+      <div v-else class="flex-1 min-h-0 overflow-auto">
         <Table>
-          <TableHeader class="sticky top-0 z-10 bg-card">
-            <TableRow>
+          <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+            <TableRow class="border-b-0">
               <TableHead class="min-w-[120px] bg-card cursor-pointer select-none" @click="toggleSort('customerId')">
                 <div class="flex items-center gap-1">Customer ID <Icon :name="sortIcon('customerId')" class="size-3 opacity-60" /></div>
               </TableHead>
@@ -424,7 +478,7 @@ function getFullName(c: any): string {
 
               <!-- Address -->
               <TableCell>
-                <span class="truncate max-w-[200px] block">{{ customer.Address || '—' }}</span>
+                <span class="truncate max-w-[200px] block">{{ customer.Address || customer['Customer Address'] || '—' }}</span>
               </TableCell>
 
               <!-- Unit # -->
@@ -510,79 +564,85 @@ function getFullName(c: any): string {
           </TableBody>
         </Table>
       </div>
-    </div>
 
-    <!-- Create/Edit Dialog -->
-    <Dialog v-model:open="showDialog">
-      <DialogContent class="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{{ editingCustomer ? 'Edit' : 'New' }} Customer</DialogTitle>
-          <DialogDescription class="sr-only">
-            {{ editingCustomer ? 'Edit' : 'Create' }} a customer record
-          </DialogDescription>
-        </DialogHeader>
-        <form class="space-y-4" @submit.prevent="handleSave">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div v-for="field in formFields" :key="field.key" v-show="field.key !== 'customerId' || editingCustomer" class="space-y-1.5">
-              <Label :for="field.key" class="text-xs">{{ field.label }}</Label>
-              <Select v-if="field.type === 'select'" v-model="formData[field.key]">
-                <SelectTrigger>
-                  <SelectValue :placeholder="`Select ${field.label.toLowerCase()}`" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                v-else
-                :id="field.key"
-                v-model="formData[field.key]"
-                :type="field.type || 'text'"
-                :placeholder="field.placeholder"
-                :disabled="editingCustomer && field.key === 'customerId'"
-              />
+      <!-- Create/Edit Dialog -->
+      <Dialog v-model:open="showDialog">
+        <DialogContent class="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{{ editingCustomer ? 'Edit' : 'New' }} Customer</DialogTitle>
+            <DialogDescription class="sr-only">
+              {{ editingCustomer ? 'Edit' : 'Create' }} a customer record
+            </DialogDescription>
+          </DialogHeader>
+          <form class="space-y-4" @submit.prevent="handleSave">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div v-for="field in formFields" :key="field.key" v-show="field.key !== 'customerId' || editingCustomer" class="space-y-1.5">
+                <Label :for="field.key" class="text-xs">{{ field.label }}</Label>
+                <Select v-if="field.type === 'select'" v-model="formData[field.key]">
+                  <SelectTrigger>
+                    <SelectValue :placeholder="`Select ${field.label.toLowerCase()}`" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  v-else
+                  :id="field.key"
+                  v-model="formData[field.key]"
+                  :type="field.type || 'text'"
+                  :placeholder="field.placeholder"
+                  :disabled="editingCustomer && field.key === 'customerId'"
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" @click="showDialog = false">
-              Cancel
-            </Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 size-4 animate-spin" />
-              {{ editingCustomer ? 'Update' : 'Create' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <DialogFooter>
+              <Button variant="outline" type="button" @click="showDialog = false">
+                Cancel
+              </Button>
+              <Button type="submit" :disabled="saving">
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 size-4 animate-spin" />
+                {{ editingCustomer ? 'Update' : 'Create' }}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-    <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="showDeleteDialog">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Customer?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently delete <strong>{{ getFullName(deletingCustomer || {}) }}</strong>
-            ({{ deletingCustomer?.['Customer ID'] }}). This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90" @click="handleDelete">
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <!-- Delete Confirmation -->
+      <AlertDialog v-model:open="showDeleteDialog">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{{ getFullName(deletingCustomer || {}) }}</strong>
+              ({{ deletingCustomer?.['Customer ID'] }}). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90" @click="handleDelete">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-    <!-- Google Drive Files Modal -->
-    <CustomerFilesModal
-      v-if="filesModalCustomer"
-      v-model:open="showFilesModal"
-      :customer-name="getFullName(filesModalCustomer)"
-      :drive-link="filesModalCustomer['Customer Files'] || ''"
-    />
-  </div>
+      <!-- Google Drive Files Modal -->
+      <CustomerFilesModal
+        v-if="filesModalCustomer"
+        v-model:open="showFilesModal"
+        :customer-name="getFullName(filesModalCustomer)"
+        :drive-link="filesModalCustomer['Customer Files'] || ''"
+      />
+    </div>
+  </CustomersLayout>
 </template>
+
+<style scoped>
+:deep([data-slot="table-container"]) {
+  overflow: visible !important;
+}
+</style>

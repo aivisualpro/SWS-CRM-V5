@@ -11,6 +11,7 @@ const error = ref('')
 const search = ref('')
 const CHUNK_SIZE = 30
 const visibleCount = ref(CHUNK_SIZE)
+const activeRole = ref('')
 
 // CRUD state
 const showDialog = ref(false)
@@ -152,13 +153,33 @@ function sortIcon(col: string) {
 }
 
 // ─── Computed ───────────────────────────────────────────────
-const filteredUsers = computed(() => {
-  if (!search.value) return users.value
-  const q = search.value.toLowerCase()
-  return users.value.filter((u: any) => {
-    const fullName = [u['First Name'], u['Last Name']].filter(Boolean).join(' ')
-    return [...Object.values(u), fullName].filter(Boolean).some(val => String(val).toLowerCase().includes(q))
+// Extract unique roles from users data
+const uniqueRoles = computed(() => {
+  const rolesSet = new Set<string>()
+  users.value.forEach((u: any) => {
+    if (u.Role) rolesSet.add(u.Role)
   })
+  return [...rolesSet].sort()
+})
+
+const filteredUsers = computed(() => {
+  let result = users.value
+
+  // Filter by active role
+  if (activeRole.value) {
+    result = result.filter((u: any) => u.Role === activeRole.value)
+  }
+
+  // Filter by search
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    result = result.filter((u: any) => {
+      const fullName = [u['First Name'], u['Last Name']].filter(Boolean).join(' ')
+      return [...Object.values(u), fullName].filter(Boolean).some(val => String(val).toLowerCase().includes(q))
+    })
+  }
+
+  return result
 })
 
 const USER_COL_FIELD: Record<string, string> = {
@@ -199,6 +220,7 @@ const visibleUsers = computed(() => sortedUsers.value.slice(0, visibleCount.valu
 const hasMore = computed(() => visibleCount.value < sortedUsers.value.length)
 
 watch(search, () => { visibleCount.value = CHUNK_SIZE })
+watch(activeRole, () => { visibleCount.value = CHUNK_SIZE })
 
 // Infinite scroll
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -240,56 +262,56 @@ function statusLabel(u: any): boolean {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col min-h-0">
-    <!-- Teleport search + actions to header -->
-    <Teleport v-if="isMounted" to="#header-toolbar">
-      <div class="flex items-center gap-2 w-full justify-end">
-        <div class="relative max-w-[220px]">
-          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input v-model="search" placeholder="Search users..." class="pl-8 h-8 text-sm" />
+  <AdminLayout :roles="uniqueRoles" v-model:active-role="activeRole">
+    <div class="w-full flex-1 flex flex-col min-h-0">
+      <!-- Teleport search + actions to header -->
+      <Teleport v-if="isMounted" to="#header-toolbar">
+        <div class="flex items-center gap-2 w-full justify-end">
+          <div class="relative max-w-[220px]">
+            <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input v-model="search" placeholder="Search users..." class="pl-8 h-8 text-sm" />
+          </div>
+          <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
+            {{ filteredUsers.length }} record{{ filteredUsers.length !== 1 ? 's' : '' }}
+          </p>
+          <Button variant="ghost" size="sm" class="h-8" @click="fetchUsers">
+            <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
+          </Button>
+          <Button size="sm" class="h-8" @click="openCreate">
+            <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
+            Add User
+          </Button>
         </div>
-        <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
-          {{ filteredUsers.length }} record{{ filteredUsers.length !== 1 ? 's' : '' }}
-        </p>
-        <Button variant="ghost" size="sm" class="h-8" @click="fetchUsers">
-          <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
-        </Button>
-        <Button size="sm" class="h-8" @click="openCreate">
-          <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
-          Add User
-        </Button>
-      </div>
-    </Teleport>
+      </Teleport>
 
-    <!-- Error State -->
-    <Card v-if="error" class="border-destructive p-6">
-      <div class="flex flex-col items-center gap-3 text-center">
-        <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
-        <p class="font-medium text-destructive">{{ error }}</p>
-        <Button size="sm" variant="outline" @click="fetchUsers">
-          <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
-          Retry
-        </Button>
-      </div>
-    </Card>
+      <!-- Error State -->
+      <Card v-if="error" class="border-destructive p-6">
+        <div class="flex flex-col items-center gap-3 text-center">
+          <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
+          <p class="font-medium text-destructive">{{ error }}</p>
+          <Button size="sm" variant="outline" @click="fetchUsers">
+            <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
+            Retry
+          </Button>
+        </div>
+      </Card>
 
-    <!-- Loading Skeleton -->
-    <Card v-else-if="loading" class="p-6">
-      <div class="space-y-4">
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-3/4" />
-      </div>
-    </Card>
+      <!-- Loading Skeleton -->
+      <Card v-else-if="loading" class="p-6">
+        <div class="space-y-4">
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-3/4" />
+        </div>
+      </Card>
 
-    <!-- Data Table -->
-    <div v-else class="flex-1 min-h-0 flex flex-col rounded-xl border shadow-sm bg-card overflow-hidden">
-      <div class="overflow-auto flex-1 min-h-0">
+      <!-- Data Table -->
+      <div v-else class="flex-1 min-h-0 overflow-auto">
         <Table>
-          <TableHeader class="sticky top-0 z-10 bg-card">
-            <TableRow>
+          <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+            <TableRow class="border-b-0">
               <TableHead class="min-w-[180px] bg-card cursor-pointer select-none" @click="toggleSort('fullName')">
                 <div class="flex items-center gap-1">Full Name <Icon :name="sortIcon('fullName')" class="size-3 opacity-60" /></div>
               </TableHead>
@@ -423,69 +445,75 @@ function statusLabel(u: any): boolean {
           </TableBody>
         </Table>
       </div>
-    </div>
 
-    <!-- Create/Edit Dialog -->
-    <Dialog v-model:open="showDialog">
-      <DialogContent class="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{{ editingUser ? 'Edit' : 'New' }} User</DialogTitle>
-          <DialogDescription class="sr-only">
-            {{ editingUser ? 'Edit' : 'Create' }} a user record
-          </DialogDescription>
-        </DialogHeader>
-        <form class="space-y-4" @submit.prevent="handleSave">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div v-for="field in formFields" :key="field.key" class="space-y-1.5">
-              <Label :for="field.key" class="text-xs">{{ field.label }}</Label>
-              <Select v-if="field.type === 'select'" v-model="formData[field.key]">
-                <SelectTrigger>
-                  <SelectValue :placeholder="`Select ${field.label.toLowerCase()}`" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                v-else
-                :id="field.key"
-                v-model="formData[field.key]"
-                :type="field.type || 'text'"
-                :placeholder="field.placeholder"
-                :disabled="!!editingUser && field.key === 'email'"
-              />
+      <!-- Create/Edit Dialog -->
+      <Dialog v-model:open="showDialog">
+        <DialogContent class="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{{ editingUser ? 'Edit' : 'New' }} User</DialogTitle>
+            <DialogDescription class="sr-only">
+              {{ editingUser ? 'Edit' : 'Create' }} a user record
+            </DialogDescription>
+          </DialogHeader>
+          <form class="space-y-4" @submit.prevent="handleSave">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div v-for="field in formFields" :key="field.key" class="space-y-1.5">
+                <Label :for="field.key" class="text-xs">{{ field.label }}</Label>
+                <Select v-if="field.type === 'select'" v-model="formData[field.key]">
+                  <SelectTrigger>
+                    <SelectValue :placeholder="`Select ${field.label.toLowerCase()}`" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  v-else
+                  :id="field.key"
+                  v-model="formData[field.key]"
+                  :type="field.type || 'text'"
+                  :placeholder="field.placeholder"
+                  :disabled="!!editingUser && field.key === 'email'"
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" @click="showDialog = false">Cancel</Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 size-4 animate-spin" />
-              {{ editingUser ? 'Update' : 'Create' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <DialogFooter>
+              <Button variant="outline" type="button" @click="showDialog = false">Cancel</Button>
+              <Button type="submit" :disabled="saving">
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 size-4 animate-spin" />
+                {{ editingUser ? 'Update' : 'Create' }}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-    <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="showDeleteDialog">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete User?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently delete <strong>{{ getFullName(deletingUser || {}) }}</strong>
-            ({{ deletingUser?.Email }}). This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90" @click="handleDelete">
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  </div>
+      <!-- Delete Confirmation -->
+      <AlertDialog v-model:open="showDeleteDialog">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{{ getFullName(deletingUser || {}) }}</strong>
+              ({{ deletingUser?.Email }}). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90" @click="handleDelete">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  </AdminLayout>
 </template>
+
+<style scoped>
+:deep([data-slot="table-container"]) {
+  overflow: visible !important;
+}
+</style>

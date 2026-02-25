@@ -204,55 +204,55 @@ function permBadgeClass(val: string) {
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col min-h-0">
-    <!-- Teleport search + actions to header -->
-    <Teleport v-if="isMounted" to="#header-toolbar">
-      <div class="flex items-center gap-2 w-full justify-end">
-        <div class="relative max-w-[220px]">
-          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input v-model="search" placeholder="Search roles..." class="pl-8 h-8 text-sm" />
+  <AdminLayout>
+    <div class="w-full flex-1 flex flex-col min-h-0">
+      <!-- Teleport search + actions to header -->
+      <Teleport v-if="isMounted" to="#header-toolbar">
+        <div class="flex items-center gap-2 w-full justify-end">
+          <div class="relative max-w-[220px]">
+            <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input v-model="search" placeholder="Search roles..." class="pl-8 h-8 text-sm" />
+          </div>
+          <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
+            {{ filteredRoles.length }} record{{ filteredRoles.length !== 1 ? 's' : '' }}
+          </p>
+          <Button variant="ghost" size="sm" class="h-8" @click="fetchRoles">
+            <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
+          </Button>
+          <Button size="sm" class="h-8" @click="openCreate">
+            <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
+            Add Role
+          </Button>
         </div>
-        <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
-          {{ filteredRoles.length }} record{{ filteredRoles.length !== 1 ? 's' : '' }}
-        </p>
-        <Button variant="ghost" size="sm" class="h-8" @click="fetchRoles">
-          <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
-        </Button>
-        <Button size="sm" class="h-8" @click="openCreate">
-          <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
-          Add Role
-        </Button>
-      </div>
-    </Teleport>
+      </Teleport>
 
-    <!-- Error State -->
-    <Card v-if="error" class="border-destructive p-6">
-      <div class="flex flex-col items-center gap-3 text-center">
-        <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
-        <p class="font-medium text-destructive">{{ error }}</p>
-        <Button size="sm" variant="outline" @click="fetchRoles">
-          <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
-          Retry
-        </Button>
-      </div>
-    </Card>
+      <!-- Error State -->
+      <Card v-if="error" class="border-destructive p-6">
+        <div class="flex flex-col items-center gap-3 text-center">
+          <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
+          <p class="font-medium text-destructive">{{ error }}</p>
+          <Button size="sm" variant="outline" @click="fetchRoles">
+            <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
+            Retry
+          </Button>
+        </div>
+      </Card>
 
-    <!-- Loading Skeleton -->
-    <Card v-else-if="loading" class="p-6">
-      <div class="space-y-4">
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-full" />
-        <Skeleton class="h-10 w-3/4" />
-      </div>
-    </Card>
+      <!-- Loading Skeleton -->
+      <Card v-else-if="loading" class="p-6">
+        <div class="space-y-4">
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-3/4" />
+        </div>
+      </Card>
 
-    <!-- Data Table -->
-    <div v-else class="flex-1 min-h-0 flex flex-col rounded-xl border shadow-sm bg-card overflow-hidden">
-      <div class="overflow-auto flex-1 min-h-0">
+      <!-- Data Table -->
+      <div v-else class="flex-1 min-h-0 overflow-auto">
         <Table>
-          <TableHeader class="sticky top-0 z-10 bg-card">
-            <TableRow>
+          <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+            <TableRow class="border-b-0">
               <TableHead class="min-w-[150px] bg-card cursor-pointer select-none" @click="toggleSort('role')">
                 <div class="flex items-center gap-1">Role <Icon :name="sortIcon('role')" class="size-3 opacity-60" /></div>
               </TableHead>
@@ -377,7 +377,6 @@ function permBadgeClass(val: string) {
           </TableBody>
         </Table>
       </div>
-    </div>
 
     <!-- Create/Edit Dialog -->
     <Dialog v-model:open="showDialog">
@@ -429,5 +428,12 @@ function permBadgeClass(val: string) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  </div>
+    </div>
+  </AdminLayout>
 </template>
+
+<style scoped>
+:deep([data-slot="table-container"]) {
+  overflow: visible !important;
+}
+</style>

@@ -202,10 +202,4 @@ export const navMenuBottom: NavMenuItems = [
     icon: 'i-lucide-circle-help',
     link: '/docs',
   },
-  {
-    title: 'Feedback',
-    titleKey: 'nav.feedback',
-    icon: 'i-lucide-send',
-    link: '/docs',
-  },
 ]

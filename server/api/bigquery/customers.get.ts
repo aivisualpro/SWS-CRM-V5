@@ -5,7 +5,7 @@
  */
 
 let _cache: { data: any[], timestamp: number } | null = null
-const CACHE_TTL = 60_000
+const CACHE_TTL = 300_000 // 5 minutes
 
 export default defineEventHandler(async (event) => {
   try {

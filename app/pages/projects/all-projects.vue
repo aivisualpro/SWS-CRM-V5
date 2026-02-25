@@ -33,34 +33,9 @@ async function fetchProjects() {
   loading.value = true
   error.value = ''
   try {
-    const [projectData, userData, customerData] = await Promise.all([
-      $fetch<{ success: boolean, projects: any[], count: number }>('/api/bigquery/projects'),
-      $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
-      $fetch<{ success: boolean, customers: any[] }>('/api/bigquery/customers').catch(() => ({ success: false, customers: [] })),
-    ])
+    // Phase 1: Load projects first → table renders immediately
+    const projectData = await $fetch<{ success: boolean, projects: any[], count: number }>('/api/bigquery/projects')
     if (projectData.success) projects.value = projectData.projects
-    // Build email → full name lookup
-    if (userData.success) {
-      userNameMap.value = Object.fromEntries(
-        userData.users
-          .filter((u: any) => u.Email)
-          .map((u: any) => [
-            u.Email.toLowerCase(),
-            [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
-          ]),
-      )
-    }
-    // Build customerId → full name lookup
-    if (customerData.success) {
-      customerNameMap.value = Object.fromEntries(
-        customerData.customers
-          .filter((c: any) => c['Customer ID'])
-          .map((c: any) => [
-            c['Customer ID'],
-            [c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID'],
-          ]),
-      )
-    }
   }
   catch (e: any) {
     error.value = e.data?.statusMessage || e.message || 'Failed to load projects'
@@ -68,6 +43,39 @@ async function fetchProjects() {
   }
   finally {
     loading.value = false
+  }
+
+  // Phase 2: Load users & customers in the background (non-blocking)
+  // Names will reactively resolve once these complete
+  loadLookupData()
+}
+
+async function loadLookupData() {
+  const [userData, customerData] = await Promise.all([
+    $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
+    $fetch<{ success: boolean, customers: any[] }>('/api/bigquery/customers').catch(() => ({ success: false, customers: [] })),
+  ])
+  // Build email → full name lookup
+  if (userData.success) {
+    userNameMap.value = Object.fromEntries(
+      userData.users
+        .filter((u: any) => u.Email)
+        .map((u: any) => [
+          u.Email.toLowerCase(),
+          [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
+        ]),
+    )
+  }
+  // Build customerId → full name lookup
+  if (customerData.success) {
+    customerNameMap.value = Object.fromEntries(
+      customerData.customers
+        .filter((c: any) => c['Customer ID'])
+        .map((c: any) => [
+          c['Customer ID'],
+          [c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID'],
+        ]),
+    )
   }
 }
 
@@ -96,9 +104,7 @@ function sortIcon(col: string) {
 const columns = [
   { key: 'Project ID', label: 'Project ID', width: '110px' },
   { key: 'Customer name', label: 'Customer', width: '160px' },
-  { key: 'Customer Address', label: 'Address', width: '200px' },
-  { key: 'City', label: 'City', width: '100px' },
-  { key: 'Zip Code', label: 'Zip', width: '70px' },
+  { key: 'Customer Address', label: 'Address', width: '350px' },
   { key: 'Branch Name', label: 'Branch', width: '80px' },
   { key: 'Project Type', label: 'Type', width: '80px' },
   { key: 'Job Status', label: 'Job Status', width: '100px' },
@@ -263,7 +269,7 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
 
 <template>
   <ProjectsLayout>
-    <div class="w-full h-full flex flex-col min-h-0">
+    <div class="w-full flex-1 flex flex-col min-h-0">
       <!-- Teleport search + actions to header -->
       <Teleport v-if="isMounted" to="#header-toolbar">
         <div class="flex items-center gap-2 w-full justify-end">
@@ -304,133 +310,131 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
       </Card>
 
       <!-- Data Table -->
-      <div v-else class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="overflow-auto flex-1 min-h-0">
-          <Table>
-            <TableHeader class="sticky top-0 z-10 bg-card">
-              <TableRow>
-                <TableHead
-                  v-for="col in columns"
-                  :key="col.key"
-                  class="bg-card cursor-pointer select-none whitespace-nowrap"
-                  :style="{ minWidth: col.width }"
-                  @click="toggleSort(col.key)"
-                >
-                  <div class="flex items-center gap-1">
-                    {{ col.label }}
-                    <Icon :name="sortIcon(col.key)" class="size-3 opacity-60" />
-                  </div>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              <TableRow
-                v-for="(project, idx) in visibleProjects"
-                :key="project['Project ID'] || idx"
-                class="group"
+      <div v-else class="flex-1 min-h-0 overflow-auto">
+        <Table>
+          <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+            <TableRow class="border-b-0">
+              <TableHead
+                v-for="col in columns"
+                :key="col.key"
+                class="bg-card cursor-pointer select-none whitespace-nowrap"
+                :style="{ minWidth: col.width }"
+                @click="toggleSort(col.key)"
               >
-                <TableCell v-for="col in columns" :key="col.key">
-                  <!-- Project Folder -->
-                  <template v-if="col.key === 'Project Folder'">
-                    <button
-                      v-if="project['Project Folder']"
-                      class="group/folder relative flex items-center justify-center size-8 rounded-lg transition-all duration-200 hover:bg-[#1da462]/10 hover:shadow-sm"
-                      title="View files in Google Drive"
-                      @click.stop="openFilesModal(project)"
-                    >
-                      <svg class="size-5 transition-all duration-200 group-hover/folder:scale-110" viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 19.5l3-5.25H21l-3 5.25H4.5z" fill="#1da462" opacity=".7" />
-                        <path d="M12 4.5L4.5 17.25l3 2.25L15 7.5 12 4.5z" fill="#1da462" opacity=".85" />
-                        <path d="M21 15l-4.5-7.5L13.5 9l4.5 7.5L21 15z" fill="#1da462" />
-                      </svg>
-                      <span class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-[#34a853] opacity-0 group-hover/folder:opacity-100 transition-opacity" />
-                    </button>
-                    <span v-else class="text-muted-foreground/40">—</span>
-                  </template>
+                <div class="flex items-center gap-1">
+                  {{ col.label }}
+                  <Icon :name="sortIcon(col.key)" class="size-3 opacity-60" />
+                </div>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
 
-                  <!-- Status badges -->
-                  <template v-else-if="statusColumns.includes(col.key)">
-                    <Badge
-                      v-if="project[col.key] && project[col.key] !== '—'"
-                      variant="outline"
-                      :class="statusColor(project[col.key])"
-                      class="text-[10px] whitespace-nowrap"
-                    >
-                      {{ project[col.key] }}
-                    </Badge>
-                    <span v-else class="text-muted-foreground/40">—</span>
-                  </template>
+          <TableBody>
+            <TableRow
+              v-for="(project, idx) in visibleProjects"
+              :key="project['Project ID'] || idx"
+              class="group"
+            >
+              <TableCell v-for="col in columns" :key="col.key">
+                <!-- Project Folder -->
+                <template v-if="col.key === 'Project Folder'">
+                  <button
+                    v-if="project['Project Folder']"
+                    class="group/folder relative flex items-center justify-center size-8 rounded-lg transition-all duration-200 hover:bg-[#1da462]/10 hover:shadow-sm"
+                    title="View files in Google Drive"
+                    @click.stop="openFilesModal(project)"
+                  >
+                    <svg class="size-5 transition-all duration-200 group-hover/folder:scale-110" viewBox="0 0 24 24" fill="none">
+                      <path d="M4.5 19.5l3-5.25H21l-3 5.25H4.5z" fill="#1da462" opacity=".7" />
+                      <path d="M12 4.5L4.5 17.25l3 2.25L15 7.5 12 4.5z" fill="#1da462" opacity=".85" />
+                      <path d="M21 15l-4.5-7.5L13.5 9l4.5 7.5L21 15z" fill="#1da462" />
+                    </svg>
+                    <span class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-[#34a853] opacity-0 group-hover/folder:opacity-100 transition-opacity" />
+                  </button>
+                  <span v-else class="text-muted-foreground/40">—</span>
+                </template>
 
-                  <!-- Date fields -->
-                  <template v-else-if="dateColumns.includes(col.key)">
-                    <span class="text-muted-foreground text-sm whitespace-nowrap">
-                      {{ formatDate(project[col.key]) }}
-                    </span>
-                  </template>
+                <!-- Status badges -->
+                <template v-else-if="statusColumns.includes(col.key)">
+                  <Badge
+                    v-if="project[col.key] && project[col.key] !== '—'"
+                    variant="outline"
+                    :class="statusColor(project[col.key])"
+                    class="text-[10px] whitespace-nowrap"
+                  >
+                    {{ project[col.key] }}
+                  </Badge>
+                  <span v-else class="text-muted-foreground/40">—</span>
+                </template>
 
-                  <!-- Currency fields -->
-                  <template v-else-if="currencyColumns.includes(col.key)">
-                    <span class="text-sm tabular-nums whitespace-nowrap">
-                      {{ formatCurrency(project[col.key]) }}
-                    </span>
-                  </template>
+                <!-- Date fields -->
+                <template v-else-if="dateColumns.includes(col.key)">
+                  <span class="text-muted-foreground text-sm whitespace-nowrap">
+                    {{ formatDate(project[col.key]) }}
+                  </span>
+                </template>
 
-                  <!-- Project ID -->
-                  <template v-else-if="col.key === 'Project ID'">
-                    <span class="font-mono text-xs">{{ project['Project ID'] || '—' }}</span>
-                  </template>
+                <!-- Currency fields -->
+                <template v-else-if="currencyColumns.includes(col.key)">
+                  <span class="text-sm tabular-nums whitespace-nowrap">
+                    {{ formatCurrency(project[col.key]) }}
+                  </span>
+                </template>
 
-                  <!-- Customer name with avatar -->
-                  <template v-else-if="col.key === 'Customer name'">
-                    <div class="flex items-center gap-2">
-                      <Avatar class="size-6 border shrink-0">
-                        <AvatarFallback class="text-[9px] font-medium bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-blue-700 dark:text-blue-300">
-                          {{ resolveCustomer(project).substring(0, 2).toUpperCase() }}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span class="font-medium truncate max-w-[130px]">{{ resolveCustomer(project) }}</span>
-                    </div>
-                  </template>
+                <!-- Project ID -->
+                <template v-else-if="col.key === 'Project ID'">
+                  <span class="font-mono text-xs">{{ project['Project ID'] || '—' }}</span>
+                </template>
 
-                  <!-- Email → Name columns -->
-                  <template v-else-if="emailColumns.includes(col.key)">
-                    <span class="text-sm whitespace-nowrap">{{ resolveName(project[col.key]) }}</span>
-                  </template>
-
-                  <!-- Address truncated -->
-                  <template v-else-if="col.key === 'Customer Address'">
-                    <span class="truncate max-w-[180px] block" :title="project['Customer Address']">
-                      {{ project['Customer Address'] || '—' }}
-                    </span>
-                  </template>
-
-                  <!-- Default text -->
-                  <template v-else>
-                    <span class="text-sm whitespace-nowrap">{{ cellValue(project, col.key) }}</span>
-                  </template>
-                </TableCell>
-              </TableRow>
-
-              <!-- Empty State -->
-              <TableRow v-if="visibleProjects.length === 0">
-                <TableCell :colspan="columns.length" class="h-32 text-center">
-                  <div class="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Icon name="i-lucide-inbox" class="size-8" />
-                    <p>No projects found</p>
+                <!-- Customer name with avatar -->
+                <template v-else-if="col.key === 'Customer name'">
+                  <div class="flex items-center gap-2">
+                    <Avatar class="size-6 border shrink-0">
+                      <AvatarFallback class="text-[9px] font-medium bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-blue-700 dark:text-blue-300">
+                        {{ resolveCustomer(project).substring(0, 2).toUpperCase() }}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span class="font-medium truncate max-w-[130px]">{{ resolveCustomer(project) }}</span>
                   </div>
-                </TableCell>
-              </TableRow>
+                </template>
 
-              <!-- Infinite scroll sentinel -->
-              <tr v-if="hasMore" ref="sentinelRef">
-                <td :colspan="columns.length" class="h-10 text-center text-xs text-muted-foreground">
-                  Loading more…
-                </td>
-              </tr>
-            </TableBody>
-          </Table>
-        </div>
+                <!-- Email → Name columns -->
+                <template v-else-if="emailColumns.includes(col.key)">
+                  <span class="text-sm whitespace-nowrap">{{ resolveName(project[col.key]) }}</span>
+                </template>
+
+                <!-- Address truncated -->
+                <template v-else-if="col.key === 'Customer Address'">
+                  <span class="truncate max-w-[320px] block" :title="project['Customer Address']">
+                    {{ project['Customer Address'] || '—' }}
+                  </span>
+                </template>
+
+                <!-- Default text -->
+                <template v-else>
+                  <span class="text-sm whitespace-nowrap">{{ cellValue(project, col.key) }}</span>
+                </template>
+              </TableCell>
+            </TableRow>
+
+            <!-- Empty State -->
+            <TableRow v-if="visibleProjects.length === 0">
+              <TableCell :colspan="columns.length" class="h-32 text-center">
+                <div class="flex flex-col items-center gap-2 text-muted-foreground">
+                  <Icon name="i-lucide-inbox" class="size-8" />
+                  <p>No projects found</p>
+                </div>
+              </TableCell>
+            </TableRow>
+
+            <!-- Infinite scroll sentinel -->
+            <tr v-if="hasMore" ref="sentinelRef">
+              <td :colspan="columns.length" class="h-10 text-center text-xs text-muted-foreground">
+                Loading more…
+              </td>
+            </tr>
+          </TableBody>
+        </Table>
       </div>
     </div>
 
@@ -443,3 +447,13 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
     />
   </ProjectsLayout>
 </template>
+
+<style scoped>
+/* Override Table.vue's inner overflow-auto wrapper so sticky thead works.
+   Table.vue renders: <div data-slot="table-container" class="overflow-auto">
+   which creates a nested scroll context that breaks position:sticky.
+   We neutralize it so the page-level scroll container is the only one. */
+:deep([data-slot="table-container"]) {
+  overflow: visible !important;
+}
+</style>
