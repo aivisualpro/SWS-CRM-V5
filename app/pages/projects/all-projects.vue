@@ -24,6 +24,52 @@ function openFilesModal(project: any) {
   showFilesModal.value = true
 }
 
+// ─── CRUD state ─────────────────────────────────────────────
+const showProjectForm = ref(false)
+const editingProject = ref<any>(null)
+const showDeleteConfirm = ref(false)
+const deletingProject = ref<any>(null)
+const deleteLoading = ref(false)
+
+function openCreateForm() {
+  editingProject.value = null
+  showProjectForm.value = true
+}
+
+function openEditForm(project: any) {
+  editingProject.value = project
+  showProjectForm.value = true
+}
+
+function openDeleteConfirm(project: any) {
+  deletingProject.value = project
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  if (!deletingProject.value) return
+  deleteLoading.value = true
+  try {
+    await $fetch('/api/bigquery/projects', {
+      method: 'DELETE',
+      body: { projectId: deletingProject.value['Project ID'] },
+    })
+    toast.success('Project deleted')
+    projects.value = projects.value.filter(p => p['Project ID'] !== deletingProject.value['Project ID'])
+    showDeleteConfirm.value = false
+  }
+  catch (e: any) {
+    toast.error(e.data?.statusMessage || 'Failed to delete')
+  }
+  finally {
+    deleteLoading.value = false
+  }
+}
+
+function onProjectSaved() {
+  fetchProjects()
+}
+
 // Lookup maps: email → name, customerId → name
 const userNameMap = ref<Record<string, string>>({})
 const customerNameMap = ref<Record<string, string>>({})
@@ -283,6 +329,10 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
           <Button variant="ghost" size="sm" class="h-8" @click="fetchProjects">
             <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
           </Button>
+          <Button size="sm" class="h-8" @click="openCreateForm">
+            <Icon name="i-lucide-plus" class="size-3.5 mr-1" />
+            Add Project
+          </Button>
         </div>
       </Teleport>
 
@@ -446,6 +496,42 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
       :customer-name="resolveCustomer(filesModalProject) + ' — ' + (filesModalProject['Project ID'] || '')"
       :drive-link="filesModalProject['Project Folder'] || ''"
     />
+
+    <!-- Project Form Dialog (Create / Edit) -->
+    <ProjectFormDialog
+      v-model:open="showProjectForm"
+      :project="editingProject"
+      @saved="onProjectSaved"
+    />
+
+    <!-- Delete Confirmation -->
+    <Dialog v-model:open="showDeleteConfirm">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle class="flex items-center gap-2">
+            <div class="size-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <Icon name="i-lucide-alert-triangle" class="size-4 text-red-500" />
+            </div>
+            Delete Project
+          </DialogTitle>
+          <DialogDescription class="text-sm">
+            Are you sure you want to delete project
+            <span class="font-mono font-semibold">{{ deletingProject?.['Project ID'] }}</span>?
+            This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="flex justify-end gap-2 mt-4">
+          <Button variant="outline" size="sm" :disabled="deleteLoading" @click="showDeleteConfirm = false">
+            Cancel
+          </Button>
+          <Button variant="destructive" size="sm" :disabled="deleteLoading" @click="confirmDelete">
+            <Icon v-if="deleteLoading" name="i-lucide-loader-2" class="mr-1 size-3.5 animate-spin" />
+            <Icon v-else name="i-lucide-trash-2" class="mr-1 size-3.5" />
+            Delete
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </ProjectsLayout>
 </template>
 

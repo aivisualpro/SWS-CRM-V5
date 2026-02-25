@@ -16,7 +16,7 @@ const defaultAppSettings: AppSettings = {
     variant: 'sidebar',
   },
   theme: {
-    color: 'default',
+    color: 'teal',
     type: 'default',
   },
   direction: 'ltr',

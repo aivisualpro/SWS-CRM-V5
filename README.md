@@ -1,6 +1,6 @@
 <![CDATA[<div align="center">
 
-# 🚀 Full Stack CRM
+# 🚀 SWSCRM V5
 
 **A modern, full-featured CRM boilerplate built with Nuxt 4, Vue 3, and shadcn-vue.**
 
@@ -10,7 +10,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.1-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![shadcn/ui](https://img.shields.io/badge/shadcn--vue-2.3-000000?style=for-the-badge&logo=shadcnui&logoColor=white)](https://www.shadcn-vue.com)
 
-[aivisualpro.com](https://aivisualpro.com)
+[SWSCRM V5](https://y2kgrouphosting.com)
 
 
 </div>
@@ -47,8 +47,8 @@ This boilerplate eliminates weeks of setup time by providing a fully structured,
 
 | | |
 |---|---|
-| **Name** | Adeel Jabbar |
-| **Website** | [aivisualpro.com](https://aivisualpro.com) |
+| **Name** | Yosi Nuri |
+| **Website** | [SWSCRM V5](https://y2kgrouphosting.com) |
 | **Repository** | CRM-Boilerplate |
 
 ---
@@ -383,7 +383,7 @@ Full **dark mode** and **light mode** support with system preference detection, 
 
 ## 🏷 Tags
 
-`crm` · `boilerplate` · `dashboard` · `admin-panel` · `nuxt4` · `vue3` · `typescript` · `shadcn-vue` · `tailwindcss` · `pinia` · `dark-mode` · `kanban` · `email-client` · `task-management` · `authentication` · `enterprise` · `full-stack` · `responsive` · `accessible` · `aivisualpro`
+`crm` · `boilerplate` · `dashboard` · `admin-panel` · `nuxt4` · `vue3` · `typescript` · `shadcn-vue` · `tailwindcss` · `pinia` · `dark-mode` · `kanban` · `email-client` · `task-management` · `authentication` · `enterprise` · `full-stack` · `responsive` · `accessible` · `swscrm-v5`
 
 ---
 
@@ -403,13 +403,13 @@ This boilerplate is designed to be **industry-agnostic** and can be adapted for:
 
 ## 📄 License
 
-This project is proprietary software owned by **AI Visual Pro**. All rights reserved.
+This project is proprietary software owned by **SWSCRM V5**. All rights reserved.
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by [Adeel Jabbar](https://aivisualpro.com)**
+**Built with ❤️ by [Yosi Nuri](https://y2kgrouphosting.com) — SWSCRM V5**
 
 </div>
 ]]>

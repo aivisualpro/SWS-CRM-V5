@@ -140,6 +140,17 @@ const projectStats = computed(() => {
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
 }
+
+// ─── Project CRUD ──────────────────────────────────────────
+const showProjectForm = ref(false)
+
+function openCreateProject() {
+  showProjectForm.value = true
+}
+
+function onProjectSaved() {
+  fetchProjects()
+}
 </script>
 
 <template>
@@ -312,6 +323,10 @@ function formatCurrency(value: number): string {
                       {{ projects.length }}
                     </Badge>
                   </h2>
+                  <Button size="sm" class="h-7 text-xs" @click="openCreateProject">
+                    <Icon name="i-lucide-plus" class="size-3 mr-1" />
+                    Add Project
+                  </Button>
                 </div>
 
                 <!-- Projects Loading -->
@@ -408,6 +423,17 @@ function formatCurrency(value: number): string {
         </div>
       </div>
     </div>
+
+    <!-- Project Form Dialog -->
+    <ProjectFormDialog
+      v-model:open="showProjectForm"
+      :customer-id="customer?.['Customer ID'] || ''"
+      :customer-name="getFullName(customer)"
+      :customer-email="customer?.Email || ''"
+      :customer-phone="customer?.Phone || ''"
+      :customer-address="customer?.Address || customer?.['Customer Address'] || ''"
+      @saved="onProjectSaved"
+    />
   </CustomersLayout>
 </template>
 

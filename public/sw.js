@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aivisualpro-v1'
+const CACHE_NAME = 'swscrm-v5-v1'
 const STATIC_ASSETS = [
   '/',
   '/favicon.svg',

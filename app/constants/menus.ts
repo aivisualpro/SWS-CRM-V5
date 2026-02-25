@@ -48,6 +48,11 @@ export const navMenu: NavMenu[] = [
         link: '/projects/all-projects',
       },
       {
+        title: 'Finances',
+        icon: 'i-lucide-banknote',
+        link: '/finances',
+      },
+      {
         title: 'Events',
         icon: 'i-lucide-calendar-days',
         link: '/events/calendar',

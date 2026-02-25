@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { cn } from '@/lib/utils'
 
+const props = defineProps<{
+  hideSidebar?: boolean
+}>()
+
 const route = useRoute()
 
 const tabs = [
   { title: 'All Projects', href: '/projects/all-projects', icon: 'i-lucide-folder-kanban' },
-  { title: 'All Finance', href: '/projects/all-finance', icon: 'i-lucide-wallet' },
   { title: 'My Open Projects', href: '/projects/my-open', icon: 'i-lucide-folder-open' },
   { title: 'My Closed Projects', href: '/projects/my-closed', icon: 'i-lucide-folder-check' },
   { title: 'My Cancelled Projects', href: '/projects/my-cancelled', icon: 'i-lucide-folder-x' },
@@ -19,8 +22,8 @@ const tabs = [
 
 <template>
   <div class="w-full flex-1 min-h-0 flex">
-    <!-- Sub-sidebar -->
-    <div class="w-[220px] shrink-0 border-r bg-card/50 flex flex-col min-h-0 overflow-y-auto">
+    <!-- Sub-sidebar (hidden when hideSidebar prop is true) -->
+    <div v-if="!hideSidebar" class="w-[220px] shrink-0 border-r bg-card/50 flex flex-col min-h-0 overflow-y-auto">
       <nav class="flex flex-col gap-0.5 p-2">
         <NuxtLink
           v-for="tab in tabs"

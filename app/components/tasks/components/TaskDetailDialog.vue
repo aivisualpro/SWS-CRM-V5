@@ -14,7 +14,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   availableAssignees: () => [
-    { id: 'u1', name: 'Adeel Jabbar', avatar: '/avatars/adeel.png' },
+    { id: 'u1', name: 'Yosi Nuri', avatar: '/avatars/adeel.png' },
     { id: 'u2', name: 'Sarah Khan', avatar: '' },
     { id: 'u3', name: 'Ahmed Ali', avatar: '' },
     { id: 'u4', name: 'Maria Lopez', avatar: '' },
