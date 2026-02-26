@@ -12,6 +12,11 @@ export const navMenu: NavMenu[] = [
         link: '/',
       },
       {
+        title: 'Notifications',
+        icon: 'i-lucide-bell',
+        link: '/notifications',
+      },
+      {
         title: 'Customers',
         titleKey: 'nav.customers',
         icon: 'i-lucide-users',
@@ -88,20 +93,19 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-ticket',
         link: '/project-tickets',
       },
-    ],
-  },
-  {
-    heading: 'Apps',
-    headingKey: 'nav.apps',
-    items: [
       {
-        title: 'Kanban Board',
-        titleKey: 'nav.kanbanBoard',
-        icon: 'i-lucide-kanban',
-        link: '/kanban',
+        title: 'Vendors',
+        icon: 'i-lucide-building-2',
+        link: '/vendors',
+      },
+      {
+        title: 'Sales Reps',
+        icon: 'i-lucide-user-round-search',
+        link: '/sales-reps',
       },
     ],
   },
+  // Kanban Board hidden from sidebar — component preserved at /kanban
   {
     heading: 'Reports',
     headingKey: 'nav.reports',
@@ -117,12 +121,6 @@ export const navMenu: NavMenu[] = [
         titleKey: 'nav.financialReports',
         icon: 'i-lucide-pie-chart',
         link: '/reports/financial',
-      },
-      {
-        title: 'HR Reports',
-        titleKey: 'nav.hrReports',
-        icon: 'i-lucide-file-bar-chart',
-        link: '/reports/hr',
       },
       {
         title: 'Ready To Fund Report',

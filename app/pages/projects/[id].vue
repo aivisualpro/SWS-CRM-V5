@@ -14,8 +14,14 @@ function goBack() {
   sessionStorage.setItem('highlight-project', projectId.value)
   router.back()
 }
-
 // ─── State ──────────────────────────────────────────────────
+const { user: authUser } = useAuth()
+const currentEmail = computed(() => (authUser.value?.email || '').toLowerCase())
+
+function isChatCurrentUser(email: string): boolean {
+  if (!email || !currentEmail.value) return false
+  return email.toLowerCase() === currentEmail.value
+}
 const project = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
@@ -298,8 +304,82 @@ function chatFormatDate(date: Date): string {
 }
 function chatShowDateSep(msgs: any[], idx: number): boolean { return idx === 0 || msgs[idx - 1]._date.toDateString() !== msgs[idx]._date.toDateString() }
 const chatColors = ['bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500']
-function chatColor(id: string): string { let h = 0; for (let i = 0; i < id.length; i++) h = id.charCodeAt(i) + ((h << 5) - h); return chatColors[Math.abs(h) % chatColors.length]! }
-function chatInitials(name: string): string { return name.split(/[\s@]/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) }
+
+// All messages flat (sorted oldest first) for the bubble view
+const allChatMessagesSorted = computed(() => {
+  const all: any[] = []
+  for (const conv of chatConversations.value) {
+    all.push(...conv.messages)
+  }
+  return all.sort((a, b) => a._date.getTime() - b._date.getTime())
+})
+
+// People filter for chat card
+const chatPersonFilter = ref('')
+const chatCardPeople = computed(() => {
+  const emailSet = new Set<string>()
+  for (const msg of allChatMessagesSorted.value) {
+    if (msg.Email) emailSet.add(msg.Email.trim().toLowerCase())
+    if (msg.tag) {
+      for (const e of msg.tag.split(',')) {
+        const t = e.trim().toLowerCase()
+        if (t) emailSet.add(t)
+      }
+    }
+  }
+  return Array.from(emailSet).sort((a, b) => resolveName(a).localeCompare(resolveName(b)))
+})
+
+const filteredChatMessages = computed(() => {
+  if (!chatPersonFilter.value) return allChatMessagesSorted.value
+  const p = chatPersonFilter.value.toLowerCase()
+  return allChatMessagesSorted.value.filter(m => {
+    if ((m.Email || '').toLowerCase() === p) return true
+    if (m.tag) {
+      const tags = m.tag.split(',').map((e: string) => e.trim().toLowerCase())
+      if (tags.includes(p)) return true
+    }
+    return false
+  })
+})
+
+// Compose for chat card
+const chatCardMessage = ref('')
+const chatCardSending = ref(false)
+const chatCardAreaRef = ref<HTMLElement | null>(null)
+
+async function chatCardSend() {
+  if (!chatCardMessage.value.trim() || chatCardSending.value) return
+  chatCardSending.value = true
+  try {
+    await $fetch('/api/bigquery/send-chat', {
+      method: 'POST',
+      body: {
+        projectId: projectId.value,
+        email: authUser.value?.email || '',
+        message: chatCardMessage.value.trim(),
+        chatId: projectId.value,
+        users: chatCardPeople.value.join(','),
+      },
+    })
+    const now = new Date()
+    chatMessages.value.push({
+      MessageID: `temp-${Date.now()}`,
+      ChatID: projectId.value,
+      'Project ID': projectId.value,
+      Email: authUser.value?.email || '',
+      Chat: chatCardMessage.value.trim(),
+      TimeStamp: { value: now.toISOString() },
+      _source: 'active',
+    })
+    chatCardMessage.value = ''
+    nextTick(() => {
+      if (chatCardAreaRef.value) chatCardAreaRef.value.scrollTop = chatCardAreaRef.value.scrollHeight
+    })
+  }
+  catch { toast.error('Failed to send message') }
+  finally { chatCardSending.value = false }
+}
 
 function eventStatusIcon(status: string): string {
   const s = (status || '').toLowerCase()
@@ -622,7 +702,7 @@ function cardHasMatch(cardId: string): boolean {
                       <Icon :name="card.icon" class="size-3.5 text-white" />
                     </div>
                     <h3 class="card-title">{{ card.title }}</h3>
-                    <Badge v-if="card.id === 'chat-room' && chatConversations.length" variant="secondary" class="text-[9px] ml-auto h-4 px-1.5">{{ chatConversations.length }}</Badge>
+                    <Badge v-if="card.id === 'chat-room' && allChatMessagesSorted.length" variant="secondary" class="text-[9px] ml-auto h-4 px-1.5">{{ allChatMessagesSorted.length }}</Badge>
                     <Badge v-if="card.id === 'events' && projectEvents.length" variant="secondary" class="text-[9px] ml-auto h-4 px-1.5">{{ projectEvents.length }}</Badge>
                     <Badge v-if="card.id === 'notes' && projectNotes.length" variant="secondary" class="text-[9px] ml-auto h-4 px-1.5">{{ projectNotes.length }}</Badge>
                     <Badge v-if="card.id === 'permits' && projectPermits.length" variant="secondary" class="text-[9px] ml-auto h-4 px-1.5">{{ projectPermits.length }}</Badge>
@@ -716,38 +796,92 @@ function cardHasMatch(cardId: string): boolean {
                   <!-- CHAT ROOM -->
                   <template v-else-if="card.id === 'chat-room'">
                     <div v-if="chatLoading" class="flex items-center justify-center py-10"><Icon name="i-lucide-loader-2" class="size-5 animate-spin text-primary" /></div>
-                    <div v-else-if="chatConversations.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
+                    <div v-else-if="allChatMessagesSorted.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
                       <Icon name="i-lucide-message-circle" class="size-9 text-muted-foreground/15 mb-2" />
                       <p class="text-xs text-muted-foreground/60">No chat messages</p>
                     </div>
-                    <div v-else class="flex gap-2 h-full min-h-[280px]">
-                      <div class="w-[130px] shrink-0 border-r pr-2 overflow-y-auto space-y-1">
-                        <div v-for="conv in chatConversations" :key="conv.chatId" class="px-2 py-1.5 rounded-md cursor-pointer text-[10px] transition-all" :class="activeChatId === conv.chatId ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted/40 text-muted-foreground'" @click="activeChatId = conv.chatId">
-                          <p class="truncate font-medium">{{ chatTitle(conv) }}</p>
-                          <p class="text-[9px] opacity-60">{{ conv.messages.length }} msgs</p>
-                        </div>
+                    <div v-else class="flex flex-col h-full min-h-[320px]">
+                      <!-- People filter -->
+                      <div v-if="chatCardPeople.length > 0" class="px-3 py-2 border-b border-border/30 flex items-center justify-between gap-2">
+                        <span class="text-[10px] text-muted-foreground">{{ filteredChatMessages.length }} messages</span>
+                        <select
+                          v-model="chatPersonFilter"
+                          class="h-7 px-2 pr-6 rounded-md border border-border/40 bg-muted/40 text-[10px] text-foreground outline-none focus:ring-1 focus:ring-primary/30 transition-all appearance-none cursor-pointer max-w-[150px] truncate"
+                          style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%2710%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 4px center;"
+                        >
+                          <option value="">All People</option>
+                          <option v-for="email in chatCardPeople" :key="email" :value="email">{{ resolveName(email) }}</option>
+                        </select>
                       </div>
-                      <div class="flex-1 overflow-y-auto space-y-1 px-1">
-                        <template v-if="activeConversation">
-                          <template v-for="(msg, idx) in activeConversation.messages" :key="msg.MessageID || idx">
-                            <div v-if="chatShowDateSep(activeConversation.messages, idx)" class="flex justify-center py-1">
-                              <span class="px-2 py-0.5 text-[8px] font-semibold text-muted-foreground bg-muted/60 rounded-full">{{ chatFormatDate(msg._date) }}</span>
-                            </div>
-                            <div class="flex items-start gap-1.5">
-                              <Avatar v-if="idx === 0 || activeConversation.messages[idx - 1]?.Email !== msg.Email" class="size-5 shrink-0 mt-0.5">
-                                <AvatarFallback :class="chatColor(msg.Email || '')" class="text-[6px] font-bold text-white">{{ chatInitials(resolveName(msg.Email)) }}</AvatarFallback>
+
+                      <!-- Messages -->
+                      <div ref="chatCardAreaRef" class="flex-1 overflow-y-auto px-3 py-3 space-y-1 chat-card-scroll">
+                        <template v-for="(msg, idx) in filteredChatMessages" :key="msg.MessageID || idx">
+                          <!-- Date separator -->
+                          <div v-if="chatShowDateSep(filteredChatMessages, idx)" class="flex justify-center py-2">
+                            <span class="px-2 py-0.5 text-[8px] font-semibold text-muted-foreground bg-muted/60 rounded-full uppercase tracking-wider">{{ chatFormatDate(msg._date) }}</span>
+                          </div>
+
+                          <!-- Bubble -->
+                          <div
+                            class="flex items-end gap-1.5"
+                            :class="isChatCurrentUser(msg.Email) ? 'justify-end' : 'justify-start'"
+                          >
+                            <!-- Avatar (left, for other users) -->
+                            <template v-if="!isChatCurrentUser(msg.Email)">
+                              <Avatar
+                                v-if="idx === 0 || filteredChatMessages[idx - 1]?.Email !== msg.Email || isChatCurrentUser(filteredChatMessages[idx - 1]?.Email)"
+                                class="size-5 shrink-0 mb-0.5"
+                              >
+                                <AvatarFallback :class="chatColors[Math.abs([...msg.Email||''].reduce((h,c)=>c.charCodeAt(0)+((h<<5)-h),0)) % chatColors.length]" class="text-[6px] font-bold text-white">
+                                  {{ (resolveName(msg.Email)).split(/[\s@]/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) }}
+                                </AvatarFallback>
                               </Avatar>
                               <div v-else class="w-5 shrink-0" />
-                              <div class="max-w-[80%]">
-                                <div v-if="idx === 0 || activeConversation.messages[idx - 1]?.Email !== msg.Email" class="pl-0.5 pb-0.5"><span class="text-[9px] font-semibold" v-html="highlightText(resolveName(msg.Email))" /></div>
-                                <div class="rounded-lg px-2.5 py-1 text-[11px] leading-relaxed border border-border/30" :class="textMatches(msg.Chat) ? 'bg-primary/5 border-primary/20' : 'bg-muted/70'">
-                                  <span v-if="msg.Chat" v-html="highlightText(msg.Chat)" />
-                                  <div class="flex justify-end mt-0.5 -mb-0.5"><span class="text-[7px] text-muted-foreground/50">{{ chatFormatTime(msg._date) }}</span></div>
+                            </template>
+
+                            <div class="max-w-[75%]">
+                              <!-- Sender label -->
+                              <div
+                                v-if="!isChatCurrentUser(msg.Email) && (idx === 0 || filteredChatMessages[idx - 1]?.Email !== msg.Email || isChatCurrentUser(filteredChatMessages[idx - 1]?.Email))"
+                                class="pl-0.5 pb-0.5"
+                              >
+                                <span class="text-[9px] font-semibold" v-html="highlightText(resolveName(msg.Email))" />
+                              </div>
+
+                              <div
+                                class="rounded-xl px-2.5 py-1.5 text-[11px] leading-relaxed shadow-sm"
+                                :class="isChatCurrentUser(msg.Email)
+                                  ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                  : 'bg-muted/70 border border-border/30 text-foreground rounded-bl-sm'"
+                              >
+                                <span v-if="msg.Chat" v-html="highlightText(msg.Chat)" />
+                                <div class="flex justify-end mt-0.5 -mb-0.5">
+                                  <span class="text-[7px]" :class="isChatCurrentUser(msg.Email) ? 'text-primary-foreground/50' : 'text-muted-foreground/50'">{{ chatFormatTime(msg._date) }}</span>
                                 </div>
                               </div>
                             </div>
-                          </template>
+                          </div>
                         </template>
+                      </div>
+
+                      <!-- Compose -->
+                      <div class="px-3 py-2 border-t border-border/30">
+                        <div class="flex items-end gap-1.5">
+                          <textarea
+                            v-model="chatCardMessage"
+                            placeholder="Type a message…"
+                            rows="1"
+                            class="flex-1 resize-none rounded-lg border border-border/40 bg-muted/30 px-3 py-1.5 text-[11px] outline-none focus:ring-1 focus:ring-primary/30 transition-all placeholder:text-muted-foreground/50"
+                            style="max-height: 80px; min-height: 32px;"
+                            @keydown.enter.exact.prevent="chatCardSend"
+                            @input="(e: Event) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 80) + 'px' }"
+                          />
+                          <Button size="icon" class="size-8 rounded-lg shrink-0" :disabled="!chatCardMessage.trim() || chatCardSending" @click="chatCardSend">
+                            <Icon v-if="chatCardSending" name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                            <Icon v-else name="i-lucide-send" class="size-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </template>
@@ -1087,4 +1221,9 @@ function cardHasMatch(cardId: string): boolean {
   color: hsl(var(--destructive));
   border-color: hsl(var(--destructive) / 0.3);
 }
+
+/* Chat card scrollbar */
+.chat-card-scroll::-webkit-scrollbar { width: 3px; }
+.chat-card-scroll::-webkit-scrollbar-track { background: transparent; }
+.chat-card-scroll::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.15); border-radius: 999px; }
 </style>
