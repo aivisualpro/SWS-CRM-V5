@@ -27,28 +27,12 @@ function resolveProjectAddress(projectId: string): string {
 }
 
 // ─── State ──────────────────────────────────────────────────
-const sidebarLoading = ref(true)
 const chatLoading = ref(false)
-const chatProjects = ref<any[]>([])
+const chatProjects = computed(() => [...store.chatProjects.value])
 const activeProjectId = ref('')
 const projectMessages = ref<any[]>([])
 const searchQuery = ref('')
 const chatAreaRef = ref<HTMLElement | null>(null)
-
-// ─── Fetch project list for sidebar ─────────────────────────
-async function fetchChatProjects() {
-  sidebarLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/chat-projects')
-    if (data.success) {
-      chatProjects.value = data.projects
-    }
-  }
-  catch { toast.error('Failed to load chat projects') }
-  finally { sidebarLoading.value = false }
-}
-
-onMounted(fetchChatProjects)
 
 // ─── Sidebar list ───────────────────────────────────────────
 interface SidebarProject {
@@ -369,16 +353,8 @@ async function sendMessage() {
         </div>
       </div>
 
-      <!-- Loading -->
-      <div v-if="sidebarLoading" class="flex-1 flex items-center justify-center">
-        <div class="flex flex-col items-center gap-2">
-          <Icon name="i-lucide-loader-2" class="size-6 animate-spin text-primary" />
-          <p class="text-xs text-muted-foreground">Loading projects…</p>
-        </div>
-      </div>
-
       <!-- Project List -->
-      <div v-else class="flex-1 overflow-y-auto chat-scrollbar">
+      <div class="flex-1 overflow-y-auto chat-scrollbar">
         <div
           v-for="proj in filteredProjects"
           :key="proj.projectId"

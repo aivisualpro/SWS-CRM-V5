@@ -5,6 +5,8 @@ init()
 
 const search = ref('')
 const filterType = ref('')
+const isMounted = ref(false)
+onMounted(() => { isMounted.value = true })
 
 // Unique notification types
 const notificationTypes = computed(() => {
@@ -110,25 +112,26 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-[calc(100dvh-54px)]">
-    <!-- Toolbar -->
-    <div class="flex items-center justify-end gap-2 px-5 py-2 border-b border-border/40 shrink-0">
-      <select
-        v-model="filterType"
-        class="h-8 px-2 pr-7 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer max-w-[200px]"
-        style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 6px center;"
-      >
-        <option value="">All Types</option>
-        <option v-for="t in notificationTypes" :key="t" :value="t">{{ t }}</option>
-      </select>
-      <div class="relative">
-        <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-        <input
-          v-model="search"
-          placeholder="Search…"
-          class="h-8 w-[220px] pl-8 pr-3 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-        />
+    <!-- Teleport search + filter to header -->
+    <Teleport v-if="isMounted" to="#header-toolbar">
+      <div class="flex items-center gap-2 w-full justify-end">
+        <select
+          v-model="filterType"
+          class="h-8 px-2 pr-7 rounded-lg border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer max-w-[180px]"
+          style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 6px center;"
+        >
+          <option value="">All Types</option>
+          <option v-for="t in notificationTypes" :key="t" :value="t">{{ t }}</option>
+        </select>
+        <div class="relative max-w-[220px]">
+          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Input v-model="search" placeholder="Search..." class="pl-8 h-8 text-sm" />
+        </div>
+        <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
+          {{ filteredNotifications.length }} record{{ filteredNotifications.length !== 1 ? 's' : '' }}
+        </p>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Notification list -->
     <div class="flex-1 overflow-auto">

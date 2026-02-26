@@ -4,9 +4,18 @@ import { toast } from 'vue-sonner'
 const { setHeader } = usePageHeader()
 setHeader({ title: 'Events Calendar', icon: 'i-lucide-calendar-days' })
 
+// ── Use store for instant data ───────────────────────────────
+const store = useDashboardStore()
+store.init()
+
 // ── State ────────────────────────────────────────────────────
-const events = ref<any[]>([])
-const loading = ref(true)
+const events = computed(() =>
+  (store.events.value || []).map((e: any) => ({
+    ...e,
+    _startDate: parseDate(e['Start Date']),
+    _endDate: parseDate(e['End Date']),
+  })),
+)
 const currentDate = ref(new Date())
 const viewMode = ref<'month' | 'week'>('month')
 const isMounted = ref(false)
@@ -77,56 +86,13 @@ function openEventFromSheet(evt: any) {
   nextTick(() => openEventDetail(evt))
 }
 
-// ── User name lookup ─────────────────────────────────────────
-const userNameMap = ref<Record<string, string>>({})
-
-async function fetchUsers() {
-  try {
-    const data = await $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] }))
-    if (data.success) {
-      userNameMap.value = Object.fromEntries(
-        data.users
-          .filter((u: any) => u.Email)
-          .map((u: any) => [
-            u.Email.toLowerCase(),
-            [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
-          ]),
-      )
-    }
-  }
-  catch {}
-}
+// ── User name lookup from store ──────────────────────────────
+const userNameMap = computed(() => ({ ...store.userNameMap.value }))
 
 function resolveName(email: string): string {
   if (!email) return ''
   return userNameMap.value[email.toLowerCase()] || email
 }
-
-// ── Fetch ────────────────────────────────────────────────────
-async function fetchEvents() {
-  loading.value = true
-  try {
-    const [eventsData] = await Promise.all([
-      $fetch<{ success: boolean, events: any[], count: number }>('/api/bigquery/events'),
-      fetchUsers(),
-    ])
-    if (eventsData.success) {
-      events.value = eventsData.events.map((e: any) => ({
-        ...e,
-        _startDate: parseDate(e['Start Date']),
-        _endDate: parseDate(e['End Date']),
-      }))
-    }
-  }
-  catch (e: any) {
-    toast.error('Failed to load events')
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-onMounted(fetchEvents)
 
 // ── Date helpers ─────────────────────────────────────────────
 function parseDate(val: any): Date | null {
@@ -474,22 +440,14 @@ const totalEventsThisMonth = computed(() => {
             {{ totalEventsThisMonth }} events
           </span>
 
-          <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click="fetchEvents">
-            <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
+          <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click="store.refresh()">
+            <Icon name="i-lucide-refresh-cw" class="size-3.5" />
           </Button>
         </div>
       </Teleport>
 
-      <!-- Loading -->
-      <div v-if="loading" class="flex-1 flex items-center justify-center">
-        <div class="flex flex-col items-center gap-3">
-          <Icon name="i-lucide-loader-2" class="size-8 animate-spin text-primary" />
-          <p class="text-sm text-muted-foreground">Loading events...</p>
-        </div>
-      </div>
-
       <!-- Calendar content -->
-      <div v-else class="flex-1 min-h-0 flex flex-col">
+      <div class="flex-1 min-h-0 flex flex-col">
         <!-- Filter chips -->
         <div class="flex items-center gap-1.5 px-3 py-2 border-b overflow-x-auto no-scrollbar shrink-0">
           <button

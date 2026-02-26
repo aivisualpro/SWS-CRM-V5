@@ -20,6 +20,8 @@ const _tickets = ref<any[]>([])
 const _vendors = ref<any[]>([])
 const _salesReps = ref<any[]>([])
 const _notifications = ref<any[]>([])
+const _chatProjects = ref<any[]>([])
+const _roles = ref<any[]>([])
 
 const _userNameMap = ref<Record<string, string>>({})
 const _customerNameMap = ref<Record<string, string>>({})
@@ -64,7 +66,7 @@ async function _fetchAll() {
     if (_fetching.value) return
     _fetching.value = true
     try {
-        const [projData, eventData, userData, custData, notesData, permitsData, finData, tasksData, paymentsData, ticketsData, vendorsData, salesRepsData, notifData] = await Promise.all([
+        const [projData, eventData, userData, custData, notesData, permitsData, finData, tasksData, paymentsData, ticketsData, vendorsData, salesRepsData, notifData, chatProjData, rolesData] = await Promise.all([
             $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/projects').catch(() => ({ success: false, projects: [] })),
             $fetch<{ success: boolean, events: any[] }>('/api/bigquery/events').catch(() => ({ success: false, events: [] })),
             $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
@@ -78,6 +80,8 @@ async function _fetchAll() {
             $fetch<{ success: boolean, vendors: any[] }>('/api/bigquery/vendors').catch(() => ({ success: false, vendors: [] })),
             $fetch<{ success: boolean, salesReps: any[] }>('/api/bigquery/sales-reps').catch(() => ({ success: false, salesReps: [] })),
             $fetch<{ success: boolean, notifications: any[] }>('/api/bigquery/notifications', { params: { limit: 1000 } }).catch(() => ({ success: false, notifications: [] })),
+            $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/chat-projects').catch(() => ({ success: false, projects: [] })),
+            $fetch<{ success: boolean, roles: any[] }>('/api/bigquery/roles').catch(() => ({ success: false, roles: [] })),
         ])
         if (projData.success) _projects.value = projData.projects
         if (eventData.success) _events.value = eventData.events
@@ -92,6 +96,8 @@ async function _fetchAll() {
         if (vendorsData.success) _vendors.value = vendorsData.vendors
         if (salesRepsData.success) _salesReps.value = salesRepsData.salesReps
         if (notifData.success) _notifications.value = notifData.notifications
+        if (chatProjData.success) _chatProjects.value = chatProjData.projects
+        if (rolesData.success) _roles.value = rolesData.roles
         _buildMaps()
         _lastFetched.value = Date.now()
     }
@@ -140,6 +146,8 @@ export function useDashboardStore() {
         vendors: readonly(_vendors),
         salesReps: readonly(_salesReps),
         notifications: readonly(_notifications),
+        chatProjects: readonly(_chatProjects),
+        roles: readonly(_roles),
         userNameMap: readonly(_userNameMap),
         customerNameMap: readonly(_customerNameMap),
         projectMap: readonly(_projectMap),

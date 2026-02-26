@@ -22,89 +22,54 @@ function isChatCurrentUser(email: string): boolean {
   if (!email || !currentEmail.value) return false
   return email.toLowerCase() === currentEmail.value
 }
-const project = ref<any>(null)
-const loading = ref(true)
-const error = ref('')
+
+// Use global prefetched store — instant data, no loading
+const store = useDashboardStore()
+store.init()
+
 const isMounted = ref(false)
 const globalSearch = ref('')
 onMounted(() => { isMounted.value = true })
 
-// Chat
+// Project from store
+const project = computed(() => store.projectMap.value?.[projectId.value] || null)
+const loading = computed(() => !store.ready.value)
+const error = computed(() => store.ready.value && !project.value ? 'Project not found' : '')
+
+// Lookups from store
+const userNameMap = computed(() => ({ ...store.userNameMap.value }))
+const customerNameMap = computed(() => ({ ...store.customerNameMap.value }))
+const salesRepMap = computed(() => {
+  return Object.fromEntries(
+    (store.salesReps.value || []).filter((r: any) => r['Row ID']).map((r: any) => [
+      r['Row ID'],
+      [r['First Name'], r['Last Name']].filter(Boolean).join(' ') || r['Row ID'],
+    ]),
+  )
+})
+
+// Project-specific data from store (filtered)
+const projectEvents = computed(() =>
+  (store.events.value || []).filter((e: any) => e['Project ID'] === projectId.value),
+)
+const financeRecords = computed(() =>
+  (store.finance.value || []).filter((f: any) => f['Project ID'] === projectId.value),
+)
+const projectNotes = computed(() =>
+  (store.notes.value || []).filter((n: any) => n.ProjectId === projectId.value || n['Project ID'] === projectId.value),
+)
+const projectPermits = computed(() =>
+  (store.permits.value || []).filter((p: any) => p['Project ID'] === projectId.value),
+)
+const projectPayments = computed(() =>
+  (store.payments.value || []).filter((p: any) => p['Project ID'] === projectId.value),
+)
+
+// Chat — project-specific, still fetched on demand (not in store)
 const chatMessages = ref<any[]>([])
 const chatLoading = ref(false)
 const chatLoaded = ref(false)
 const activeChatId = ref('')
-
-// Events
-const projectEvents = ref<any[]>([])
-const eventsLoading = ref(false)
-const eventsLoaded = ref(false)
-
-// Finance
-const financeRecords = ref<any[]>([])
-const financeLoading = ref(false)
-const financeLoaded = ref(false)
-
-// Notes
-const projectNotes = ref<any[]>([])
-const notesLoading = ref(false)
-const notesLoaded = ref(false)
-
-// Permits
-const projectPermits = ref<any[]>([])
-const permitsLoading = ref(false)
-const permitsLoaded = ref(false)
-
-// Payments
-const projectPayments = ref<any[]>([])
-const paymentsLoading = ref(false)
-const paymentsLoaded = ref(false)
-
-// Lookups
-const userNameMap = ref<Record<string, string>>({})
-const customerNameMap = ref<Record<string, string>>({})
-
-// ─── Fetch ──────────────────────────────────────────────────
-async function fetchProject() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/projects')
-    if (data.success) {
-      project.value = data.projects.find((p: any) => p['Project ID'] === projectId.value) || null
-      if (!project.value) error.value = 'Project not found'
-    }
-  }
-  catch (e: any) {
-    error.value = e.data?.statusMessage || e.message || 'Failed to load project'
-    toast.error('Failed to load project')
-  }
-  finally { loading.value = false }
-  loadLookups()
-}
-
-async function loadLookups() {
-  const [userData, custData] = await Promise.all([
-    $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
-    $fetch<{ success: boolean, customers: any[] }>('/api/bigquery/customers').catch(() => ({ success: false, customers: [] })),
-  ])
-  if (userData.success) {
-    userNameMap.value = Object.fromEntries(
-      userData.users.filter((u: any) => u.Email).map((u: any) => [
-        u.Email.toLowerCase(),
-        [u['First Name'], u['Last Name']].filter(Boolean).join(' ') || u.Email,
-      ]),
-    )
-  }
-  if (custData.success) {
-    customerNameMap.value = Object.fromEntries(
-      custData.customers.filter((c: any) => c['Customer ID']).map((c: any) => [
-        c['Customer ID'],
-        [c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID'],
-      ]),
-    )
-  }
-}
 
 async function fetchChats() {
   if (chatLoaded.value || chatLoading.value) return
@@ -117,62 +82,7 @@ async function fetchChats() {
   finally { chatLoading.value = false; chatLoaded.value = true }
 }
 
-async function fetchEvents() {
-  if (eventsLoaded.value || eventsLoading.value) return
-  eventsLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, events: any[] }>('/api/bigquery/events', { params: { search: projectId.value } })
-    if (data.success) projectEvents.value = data.events.filter((e: any) => e['Project ID'] === projectId.value)
-  }
-  catch { toast.error('Failed to load events') }
-  finally { eventsLoading.value = false; eventsLoaded.value = true }
-}
-
-async function fetchFinance() {
-  if (financeLoaded.value || financeLoading.value) return
-  financeLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, finance: any[] }>('/api/bigquery/project-finance', { params: { projectId: projectId.value } })
-    if (data.success) financeRecords.value = data.finance
-  }
-  catch { toast.error('Failed to load finance data') }
-  finally { financeLoading.value = false; financeLoaded.value = true }
-}
-
-async function fetchNotes() {
-  if (notesLoaded.value || notesLoading.value) return
-  notesLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, notes: any[] }>('/api/bigquery/notes', { params: { projectId: projectId.value } })
-    if (data.success) projectNotes.value = data.notes
-  }
-  catch { toast.error('Failed to load notes') }
-  finally { notesLoading.value = false; notesLoaded.value = true }
-}
-
-async function fetchPermits() {
-  if (permitsLoaded.value || permitsLoading.value) return
-  permitsLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, permits: any[] }>('/api/bigquery/permits', { params: { projectId: projectId.value } })
-    if (data.success) projectPermits.value = data.permits
-  }
-  catch { toast.error('Failed to load permits') }
-  finally { permitsLoading.value = false; permitsLoaded.value = true }
-}
-
-async function fetchPayments() {
-  if (paymentsLoaded.value || paymentsLoading.value) return
-  paymentsLoading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, payments: any[] }>('/api/bigquery/payments', { params: { projectId: projectId.value } })
-    if (data.success) projectPayments.value = data.payments
-  }
-  catch { toast.error('Failed to load payments') }
-  finally { paymentsLoading.value = false; paymentsLoaded.value = true }
-}
-
-onMounted(() => { fetchProject(); fetchChats(); fetchEvents(); fetchFinance(); fetchNotes(); fetchPermits(); fetchPayments() })
+onMounted(() => { fetchChats() })
 
 // ─── Header computed ────────────────────────────────────────
 const customerName = computed(() => {
@@ -192,6 +102,11 @@ const jobStatuses = computed(() => {
 function resolveName(email: string): string {
   if (!email) return '—'
   return userNameMap.value[email.toLowerCase()] || email
+}
+
+function resolveSalesRep(id: string): string {
+  if (!id) return '—'
+  return salesRepMap.value[id] || id
 }
 
 function formatDate(value: any): string {
@@ -240,7 +155,7 @@ const projectInfoFields = computed(() => {
     { label: 'Finance Manager VA', value: resolveName(p['Finance Manager VA']) },
     { label: 'Engineer', value: resolveName(p.Engineer) },
     { label: 'Permit Coordinator', value: resolveName(p['Permit Coordinator']) },
-    { label: 'Sales Rep', value: resolveName(p['Sales Rep']) },
+    { label: 'Sales Rep', value: resolveSalesRep(p['Sales Rep']) },
     { label: 'Fire Approval', value: p['Fire Approval Needed'] },
     { label: 'Permits Status', value: p['PTO Status'] },
     { label: 'Contract Sign', value: formatDate(p['Project Start']) },
@@ -391,18 +306,18 @@ function eventStatusIcon(status: string): string {
 
 // ─── Drag & Drop Grid ──────────────────────────────────────
 interface CardDef {
-  id: string; title: string; icon: string; accent: string
+  id: string; title: string; icon: string; accent: string; borderColor: string
 }
 const allCards: CardDef[] = [
-  { id: 'project-info', title: 'Project Info', icon: 'i-lucide-info', accent: 'from-blue-500 to-indigo-500' },
-  { id: 'production-info', title: 'Production Info', icon: 'i-lucide-cpu', accent: 'from-amber-500 to-orange-500' },
-  { id: 'project-finance', title: 'Project Finance', icon: 'i-lucide-banknote', accent: 'from-emerald-500 to-teal-500' },
-  { id: 'documents', title: 'Documents', icon: 'i-lucide-file-text', accent: 'from-violet-500 to-purple-500' },
-  { id: 'permits', title: 'Permits', icon: 'i-lucide-clipboard-check', accent: 'from-lime-500 to-green-500' },
-  { id: 'payments', title: 'Payments', icon: 'i-lucide-credit-card', accent: 'from-pink-500 to-rose-500' },
-  { id: 'notes', title: 'Notes', icon: 'i-lucide-sticky-note', accent: 'from-yellow-500 to-amber-500' },
-  { id: 'events', title: 'Events', icon: 'i-lucide-calendar-days', accent: 'from-fuchsia-500 to-pink-500' },
-  { id: 'chat-room', title: 'Chat Room', icon: 'i-lucide-message-circle', accent: 'from-sky-500 to-cyan-500' },
+  { id: 'project-info', title: 'Project Info', icon: 'i-lucide-info', accent: 'from-blue-500 to-indigo-500', borderColor: '217 91% 60%' },
+  { id: 'production-info', title: 'Production Info', icon: 'i-lucide-cpu', accent: 'from-amber-500 to-orange-500', borderColor: '38 92% 50%' },
+  { id: 'project-finance', title: 'Project Finance', icon: 'i-lucide-banknote', accent: 'from-emerald-500 to-teal-500', borderColor: '160 84% 39%' },
+  { id: 'documents', title: 'Documents', icon: 'i-lucide-file-text', accent: 'from-violet-500 to-purple-500', borderColor: '258 90% 66%' },
+  { id: 'permits', title: 'Permits', icon: 'i-lucide-clipboard-check', accent: 'from-lime-500 to-green-500', borderColor: '142 71% 45%' },
+  { id: 'payments', title: 'Payments', icon: 'i-lucide-credit-card', accent: 'from-pink-500 to-rose-500', borderColor: '330 81% 60%' },
+  { id: 'notes', title: 'Notes', icon: 'i-lucide-sticky-note', accent: 'from-yellow-500 to-amber-500', borderColor: '45 93% 47%' },
+  { id: 'events', title: 'Events', icon: 'i-lucide-calendar-days', accent: 'from-fuchsia-500 to-pink-500', borderColor: '292 84% 61%' },
+  { id: 'chat-room', title: 'Chat Room', icon: 'i-lucide-message-circle', accent: 'from-sky-500 to-cyan-500', borderColor: '199 89% 48%' },
 ]
 
 const LAYOUT_STORAGE_KEY = 'project-detail-layout-v2'
@@ -574,7 +489,7 @@ function cardHasMatch(cardId: string): boolean {
             <p class="font-semibold text-lg">{{ error }}</p>
             <div class="flex gap-2">
               <Button variant="outline" @click="goBack"><Icon name="i-lucide-arrow-left" class="mr-1 size-4" /> Go Back</Button>
-              <Button @click="fetchProject"><Icon name="i-lucide-refresh-cw" class="mr-1 size-4" /> Retry</Button>
+              <Button @click="store.refresh"><Icon name="i-lucide-refresh-cw" class="mr-1 size-4" /> Retry</Button>
             </div>
           </div>
         </Card>
@@ -591,7 +506,7 @@ function cardHasMatch(cardId: string): boolean {
       <!-- Content -->
       <div v-else-if="project" class="flex-1 min-h-0 overflow-auto">
         <!-- Sub-header Action Bar -->
-        <div class="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border/40">
+        <div class="sticky top-0 z-10 border-b" style="background: linear-gradient(135deg, hsl(var(--primary) / 0.03), hsl(var(--background) / 0.9)); backdrop-filter: blur(12px); border-color: hsl(var(--primary) / 0.08);">
           <div class="flex items-center gap-1.5 px-4 py-2 overflow-x-auto scrollbar-none">
             <button
               class="action-btn action-btn-danger"
@@ -609,7 +524,7 @@ function cardHasMatch(cardId: string): boolean {
               <Icon name="i-lucide-pencil" class="size-3.5" />
               <span>Edit Project</span>
             </button>
-            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <div class="w-px h-5 mx-0.5 shrink-0" style="background: hsl(var(--primary) / 0.1);" />
             <button
               class="action-btn"
               title="Add Event"
@@ -634,7 +549,7 @@ function cardHasMatch(cardId: string): boolean {
               <Icon name="i-lucide-message-circle-plus" class="size-3.5" />
               <span>Add Chat</span>
             </button>
-            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <div class="w-px h-5 mx-0.5 shrink-0" style="background: hsl(var(--primary) / 0.1);" />
             <button
               class="action-btn"
               title="Project Status"
@@ -659,7 +574,7 @@ function cardHasMatch(cardId: string): boolean {
               <Icon name="i-lucide-banknote" class="size-3.5" />
               <span>Add Finance</span>
             </button>
-            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <div class="w-px h-5 mx-0.5 shrink-0" style="background: hsl(var(--primary) / 0.1);" />
             <button
               class="action-btn"
               title="Add Permit"
@@ -691,7 +606,7 @@ function cardHasMatch(cardId: string): boolean {
                 'has-search-match': cardHasMatch(card.id),
                 'no-search-match': globalSearch.trim() && !cardHasMatch(card.id),
               }"
-              :style="{ gridColumn: `span ${gridColSpan(card.id)}` }"
+              :style="{ gridColumn: `span ${gridColSpan(card.id)}`, '--card-theme': card.borderColor }"
             >
               <div class="card-inner">
                 <!-- Card Header with drag handle -->
@@ -747,7 +662,7 @@ function cardHasMatch(cardId: string): boolean {
                   <template v-else-if="card.id === 'permits'">
                     <PermitsTable
                       :records="projectPermits"
-                      :loading="permitsLoading"
+                      :loading="false"
                       :user-name-map="userNameMap"
                       :show-project="false"
                       :compact="true"
@@ -769,7 +684,7 @@ function cardHasMatch(cardId: string): boolean {
                   <template v-else-if="card.id === 'payments'">
                     <PaymentsTable
                       :records="projectPayments"
-                      :loading="paymentsLoading"
+                      :loading="false"
                       :user-name-map="userNameMap"
                       :show-project="false"
                       :compact="true"
@@ -783,7 +698,7 @@ function cardHasMatch(cardId: string): boolean {
                   <template v-else-if="card.id === 'project-finance'">
                     <FinancesTable
                       :records="financeRecords"
-                      :loading="financeLoading"
+                      :loading="false"
                       :user-name-map="userNameMap"
                       :show-project="false"
                       :compact="true"
@@ -890,7 +805,7 @@ function cardHasMatch(cardId: string): boolean {
                   <template v-else-if="card.id === 'notes'">
                     <NotesTable
                       :records="projectNotes"
-                      :loading="notesLoading"
+                      :loading="false"
                       :user-name-map="userNameMap"
                       :customer-map="customerNameMap"
                       :show-project="false"
@@ -903,7 +818,7 @@ function cardHasMatch(cardId: string): boolean {
 
                   <!-- EVENTS -->
                   <template v-else-if="card.id === 'events'">
-                    <div v-if="eventsLoading" class="flex items-center justify-center py-10"><Icon name="i-lucide-loader-2" class="size-5 animate-spin text-primary" /></div>
+                    <div v-if="false" class="flex items-center justify-center py-10"><Icon name="i-lucide-loader-2" class="size-5 animate-spin text-primary" /></div>
                     <div v-else-if="projectEvents.length === 0" class="flex flex-col items-center justify-center py-10 text-center">
                       <Icon name="i-lucide-calendar-days" class="size-9 text-muted-foreground/15 mb-2" />
                       <p class="text-xs text-muted-foreground/60">No events found</p>
@@ -959,11 +874,13 @@ function cardHasMatch(cardId: string): boolean {
 
 /* ─── Card ───────────────────────────────────────────────── */
 .dashboard-card {
+  --theme: var(--card-theme, 217 91% 60%);
   border-radius: 14px;
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
-  transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  border: 1px solid hsl(var(--theme) / 0.18);
+  border-left: 3px solid hsl(var(--theme) / 0.45);
+  background: linear-gradient(135deg, hsl(var(--theme) / 0.03) 0%, hsl(var(--card)) 60%);
+  box-shadow: none;
+  transition: border-color 0.3s ease, background 0.3s ease, transform 0.2s ease;
   overflow: hidden;
   cursor: default;
   position: relative;
@@ -973,19 +890,21 @@ function cardHasMatch(cardId: string): boolean {
 }
 
 .dashboard-card:hover {
-  box-shadow: 0 6px 20px -4px rgb(0 0 0 / 0.08);
+  border-color: hsl(var(--theme) / 0.35);
+  border-left-color: hsl(var(--theme) / 0.7);
+  background: linear-gradient(135deg, hsl(var(--theme) / 0.05) 0%, hsl(var(--card)) 50%);
 }
 
 /* Drag states */
 .dashboard-card.is-dragging {
   opacity: 0.4;
   transform: scale(0.97);
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.3);
+  box-shadow: 0 0 0 2px hsl(var(--theme) / 0.3);
 }
 
 .dashboard-card.is-drag-over {
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2), 0 8px 25px -5px rgb(0 0 0 / 0.1);
+  border-color: hsl(var(--theme) / 0.6);
+  box-shadow: 0 0 0 2px hsl(var(--theme) / 0.2);
   transform: scale(1.01);
 }
 
@@ -993,7 +912,7 @@ function cardHasMatch(cardId: string): boolean {
   content: '';
   position: absolute;
   inset: 0;
-  background: hsl(var(--primary) / 0.04);
+  background: hsl(var(--theme) / 0.04);
   border-radius: 14px;
   z-index: 5;
   pointer-events: none;
@@ -1014,15 +933,16 @@ function cardHasMatch(cardId: string): boolean {
 .card-header-bar {
   position: relative;
   padding: 10px 14px;
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  border-bottom: 1px solid hsl(var(--theme) / 0.1);
   flex-shrink: 0;
+  background: hsl(var(--theme) / 0.03);
 }
 
 .card-accent {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(to right, var(--tw-gradient-stops));
+  height: 2px;
+  background: linear-gradient(to right, hsl(var(--theme) / 0.5), hsl(var(--theme) / 0.15));
   border-radius: 14px 14px 0 0;
 }
 
@@ -1157,13 +1077,14 @@ function cardHasMatch(cardId: string): boolean {
 
 /* ─── Card Search Match States ───────────────────────────── */
 .dashboard-card.has-search-match {
-  border-color: hsl(var(--primary) / 0.5);
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15), 0 4px 16px -2px hsl(var(--primary) / 0.1);
+  border-color: hsl(var(--theme) / 0.55);
+  border-left-color: hsl(var(--theme) / 0.8);
+  background: linear-gradient(135deg, hsl(var(--theme) / 0.08) 0%, hsl(var(--card)) 50%);
   animation: matchPulse 2s ease-in-out infinite;
 }
 .dashboard-card.has-search-match .card-accent {
-  height: 4px;
-  box-shadow: 0 1px 6px hsl(var(--primary) / 0.3);
+  height: 3px;
+  background: linear-gradient(to right, hsl(var(--theme) / 0.7), hsl(var(--theme) / 0.3));
 }
 
 .dashboard-card.no-search-match {
@@ -1173,8 +1094,8 @@ function cardHasMatch(cardId: string): boolean {
 }
 
 @keyframes matchPulse {
-  0%, 100% { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15), 0 4px 16px -2px hsl(var(--primary) / 0.1); }
-  50% { box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25), 0 6px 24px -2px hsl(var(--primary) / 0.18); }
+  0%, 100% { border-color: hsl(var(--theme) / 0.45); }
+  50% { border-color: hsl(var(--theme) / 0.65); }
 }
 
 /* ─── Row-level Match Highlight ──────────────────────────── */
@@ -1191,33 +1112,32 @@ function cardHasMatch(cardId: string): boolean {
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 11.5px;
   font-weight: 500;
   white-space: nowrap;
-  border: 1px solid hsl(var(--border) / 0.5);
-  background: hsl(var(--card));
+  border: 1px solid hsl(var(--primary) / 0.12);
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.03), hsl(var(--card)));
   color: hsl(var(--muted-foreground));
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   cursor: pointer;
   flex-shrink: 0;
 }
 .action-btn:hover {
-  background: hsl(var(--muted));
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.02));
   color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px -1px hsl(var(--foreground) / 0.06);
+  border-color: hsl(var(--primary) / 0.25);
 }
 .action-btn:active {
-  transform: translateY(0);
+  transform: scale(0.97);
 }
 .action-btn-danger {
   color: hsl(var(--destructive));
-  border-color: hsl(var(--destructive) / 0.2);
+  border-color: hsl(var(--destructive) / 0.15);
+  background: linear-gradient(135deg, hsl(var(--destructive) / 0.04), hsl(var(--card)));
 }
 .action-btn-danger:hover {
-  background: hsl(var(--destructive) / 0.08);
+  background: linear-gradient(135deg, hsl(var(--destructive) / 0.1), hsl(var(--destructive) / 0.03));
   color: hsl(var(--destructive));
   border-color: hsl(var(--destructive) / 0.3);
 }

@@ -4,10 +4,12 @@ import { toast } from 'vue-sonner'
 const { setHeader } = usePageHeader()
 setHeader({ title: 'Roles & Permissions', icon: 'i-lucide-shield-check' })
 
+// ─── Store ──────────────────────────────────────────────────
+const store = useDashboardStore()
+store.init()
+
 // ─── State ──────────────────────────────────────────────────
-const roles = ref<any[]>([])
-const loading = ref(true)
-const error = ref('')
+const roles = computed(() => [...store.roles.value])
 const search = ref('')
 const CHUNK_SIZE = 30
 const visibleCount = ref(CHUNK_SIZE)
@@ -51,24 +53,7 @@ const formFields = [
   { key: 'projectButtons', label: 'Project Buttons', placeholder: '' },
 ]
 
-// ─── Fetch ──────────────────────────────────────────────────
-async function fetchRoles() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await $fetch<{ success: boolean, roles: any[], count: number }>('/api/bigquery/roles')
-    if (data.success) roles.value = data.roles
-  }
-  catch (e: any) {
-    error.value = e.data?.statusMessage || e.message || 'Failed to load roles'
-    toast.error('Failed to load roles from BigQuery')
-  }
-  finally {
-    loading.value = false
-  }
-}
 
-onMounted(fetchRoles)
 
 // ─── CRUD Handlers ──────────────────────────────────────────
 function openCreate() {
@@ -106,7 +91,7 @@ async function handleSave() {
       toast.success('Role created successfully')
     }
     showDialog.value = false
-    await fetchRoles()
+    await store.refresh()
   }
   catch (e: any) {
     toast.error(e.data?.statusMessage || 'Failed to save role')
@@ -128,7 +113,7 @@ async function handleDelete() {
     toast.success('Role deleted successfully')
     showDeleteDialog.value = false
     deletingRole.value = null
-    await fetchRoles()
+    await store.refresh()
   }
   catch (e: any) {
     toast.error(e.data?.statusMessage || 'Failed to delete role')
@@ -216,8 +201,8 @@ function permBadgeClass(val: string) {
           <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
             {{ filteredRoles.length }} record{{ filteredRoles.length !== 1 ? 's' : '' }}
           </p>
-          <Button variant="ghost" size="sm" class="h-8" @click="fetchRoles">
-            <Icon name="i-lucide-refresh-cw" class="size-3.5" :class="{ 'animate-spin': loading }" />
+          <Button variant="ghost" size="sm" class="h-8" @click="store.refresh()">
+            <Icon name="i-lucide-refresh-cw" class="size-3.5" />
           </Button>
           <Button size="sm" class="h-8" @click="openCreate">
             <Icon name="i-lucide-plus" class="mr-1 size-3.5" />
@@ -226,30 +211,8 @@ function permBadgeClass(val: string) {
         </div>
       </Teleport>
 
-      <!-- Error State -->
-      <Card v-if="error" class="border-destructive p-6">
-        <div class="flex flex-col items-center gap-3 text-center">
-          <Icon name="i-lucide-alert-triangle" class="size-10 text-destructive" />
-          <p class="font-medium text-destructive">{{ error }}</p>
-          <Button size="sm" variant="outline" @click="fetchRoles">
-            <Icon name="i-lucide-refresh-cw" class="mr-1 size-4" />
-            Retry
-          </Button>
-        </div>
-      </Card>
-
-      <!-- Loading Skeleton -->
-      <Card v-else-if="loading" class="p-6">
-        <div class="space-y-4">
-          <Skeleton class="h-10 w-full" />
-          <Skeleton class="h-10 w-full" />
-          <Skeleton class="h-10 w-full" />
-          <Skeleton class="h-10 w-3/4" />
-        </div>
-      </Card>
-
       <!-- Data Table -->
-      <div v-else class="flex-1 min-h-0 overflow-auto">
+      <div class="flex-1 min-h-0 overflow-auto">
         <Table>
           <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
             <TableRow class="border-b-0">

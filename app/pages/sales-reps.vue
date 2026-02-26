@@ -4,6 +4,8 @@ const { salesReps, vendors, init } = useDashboardStore()
 init()
 
 const search = ref('')
+const isMounted = ref(false)
+onMounted(() => { isMounted.value = true })
 
 function resolveVendor(id: string): string {
   if (!id) return '—'
@@ -38,22 +40,23 @@ const columns = [
 
 <template>
   <div class="flex flex-col h-[calc(100dvh-54px)]">
-    <!-- Toolbar -->
-    <div class="flex items-center justify-end px-5 py-2 border-b border-border/40 shrink-0">
-      <div class="relative">
-        <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-        <input
-          v-model="search"
-          placeholder="Search sales reps…"
-          class="h-8 w-[260px] pl-8 pr-3 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-        />
+    <!-- Teleport search to header -->
+    <Teleport v-if="isMounted" to="#header-toolbar">
+      <div class="flex items-center gap-2 w-full justify-end">
+        <div class="relative max-w-[220px]">
+          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Input v-model="search" placeholder="Search sales reps..." class="pl-8 h-8 text-sm" />
+        </div>
+        <p class="text-xs text-muted-foreground tabular-nums hidden lg:block whitespace-nowrap">
+          {{ filteredReps.length }} record{{ filteredReps.length !== 1 ? 's' : '' }}
+        </p>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Table -->
-    <div class="flex-1 overflow-auto">
+    <div class="flex-1 min-h-0 overflow-auto">
       <Table>
-        <TableHeader class="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+        <TableHeader class="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
           <TableRow>
             <TableHead v-for="col in columns" :key="col.key" :style="{ width: col.width, minWidth: col.width }" class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {{ col.label }}
@@ -88,3 +91,9 @@ const columns = [
     </div>
   </div>
 </template>
+
+<style scoped>
+:deep([data-slot="table-container"]) {
+  overflow: visible !important;
+}
+</style>
