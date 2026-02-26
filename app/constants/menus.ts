@@ -68,8 +68,7 @@ export const navMenu: NavMenu[] = [
         link: '/events/calendar',
       },
       {
-        title: 'Chat',
-        titleKey: 'nav.liveChat',
+        title: 'Project Chat',
         icon: 'i-lucide-message-circle',
         link: '/projects/chat',
       },

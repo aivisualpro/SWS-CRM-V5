@@ -261,6 +261,30 @@ const dateColumns = [
   'PTO Received', 'TimeStamp',
 ]
 const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount']
+
+// ─── Highlight project on return from detail page ──────────
+const highlightId = ref('')
+
+onMounted(() => {
+  const id = sessionStorage.getItem('highlight-project')
+  if (id) {
+    sessionStorage.removeItem('highlight-project')
+    highlightId.value = id
+    // Wait for data to render, then scroll into view
+    const tryScroll = () => {
+      const el = document.getElementById(`project-row-${id}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Remove highlight after 3 seconds
+        setTimeout(() => { highlightId.value = '' }, 3000)
+      } else {
+        // Data might not be rendered yet, retry
+        setTimeout(tryScroll, 200)
+      }
+    }
+    setTimeout(tryScroll, 300)
+  }
+})
 </script>
 
 <template>
@@ -309,8 +333,12 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
           <TableBody>
             <TableRow
               v-for="(project, idx) in visibleProjects"
+              :id="`project-row-${project['Project ID']}`"
               :key="project['Project ID'] || idx"
-              class="group cursor-pointer hover:bg-muted/50 transition-colors"
+              class="group cursor-pointer transition-colors"
+              :class="highlightId === project['Project ID']
+                ? 'highlight-return-row'
+                : 'hover:bg-muted/50'"
               @click="navigateTo(`/projects/${project['Project ID']}`)"
             >
               <TableCell v-for="col in columns" :key="col.key">
@@ -469,5 +497,16 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
    We neutralize it so the page-level scroll container is the only one. */
 :deep([data-slot="table-container"]) {
   overflow: visible !important;
+}
+
+.highlight-return-row {
+  animation: highlight-pulse 1s ease-in-out 3;
+  background: hsl(var(--primary) / 0.08);
+  border-left: 3px solid hsl(var(--primary));
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { background: hsl(var(--primary) / 0.04); }
+  50% { background: hsl(var(--primary) / 0.12); }
 }
 </style>

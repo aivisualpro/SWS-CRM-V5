@@ -2,10 +2,18 @@
 import { toast } from 'vue-sonner'
 
 const route = useRoute()
+const router = useRouter()
 const projectId = computed(() => route.params.id as string)
 
 const { setHeader } = usePageHeader()
 setHeader({ title: '', icon: '' })
+
+// ─── Navigation ─────────────────────────────────────────────
+function goBack() {
+  // Store project ID so the list page can highlight & scroll to it
+  sessionStorage.setItem('highlight-project', projectId.value)
+  router.back()
+}
 
 // ─── State ──────────────────────────────────────────────────
 const project = ref<any>(null)
@@ -310,17 +318,16 @@ const allCards: CardDef[] = [
   { id: 'production-info', title: 'Production Info', icon: 'i-lucide-cpu', accent: 'from-amber-500 to-orange-500' },
   { id: 'project-finance', title: 'Project Finance', icon: 'i-lucide-banknote', accent: 'from-emerald-500 to-teal-500' },
   { id: 'documents', title: 'Documents', icon: 'i-lucide-file-text', accent: 'from-violet-500 to-purple-500' },
-  { id: 'payments', title: 'Payments', icon: 'i-lucide-credit-card', accent: 'from-pink-500 to-rose-500' },
-  { id: 'chat-room', title: 'Chat Room', icon: 'i-lucide-message-circle', accent: 'from-sky-500 to-cyan-500' },
   { id: 'permits', title: 'Permits', icon: 'i-lucide-clipboard-check', accent: 'from-lime-500 to-green-500' },
+  { id: 'payments', title: 'Payments', icon: 'i-lucide-credit-card', accent: 'from-pink-500 to-rose-500' },
   { id: 'notes', title: 'Notes', icon: 'i-lucide-sticky-note', accent: 'from-yellow-500 to-amber-500' },
   { id: 'events', title: 'Events', icon: 'i-lucide-calendar-days', accent: 'from-fuchsia-500 to-pink-500' },
+  { id: 'chat-room', title: 'Chat Room', icon: 'i-lucide-message-circle', accent: 'from-sky-500 to-cyan-500' },
 ]
 
-const LAYOUT_STORAGE_KEY = 'project-detail-layout-v1'
+const LAYOUT_STORAGE_KEY = 'project-detail-layout-v2'
 
 interface SavedLayout {
-  order: string[]
   spans: Record<string, number>
 }
 
@@ -329,28 +336,24 @@ function loadLayout(): SavedLayout {
     const raw = localStorage.getItem(LAYOUT_STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as SavedLayout
-      if (Array.isArray(parsed.order) && parsed.spans) return parsed
+      if (parsed.spans) return parsed
     }
   }
   catch {}
-  return {
-    order: allCards.map(c => c.id),
-    spans: { 'chat-room': 2, events: 2 },
-  }
+  return { spans: {} }
 }
 
 function saveLayout() {
   try {
-    const data: SavedLayout = { order: cardOrder.value, spans: cardSpans.value }
+    const data: SavedLayout = { spans: cardSpans.value }
     localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(data))
   }
   catch {}
 }
 
 const savedLayout = loadLayout()
-const cardOrder = ref<string[]>(savedLayout.order)
 const cardSpans = ref<Record<string, number>>(savedLayout.spans)
-const orderedCards = computed(() => cardOrder.value.map(id => allCards.find(c => c.id === id)!).filter(Boolean))
+const orderedCards = computed(() => allCards)
 
 const SPAN_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 3]
 function getSpan(cardId: string): number { return cardSpans.value[cardId] || 1 }
@@ -385,49 +388,7 @@ function gridColSpan(cardId: string): number {
   return Math.round(v * 10)
 }
 
-// Drag state
-const draggedCardId = ref<string | null>(null)
-const dragOverCardId = ref<string | null>(null)
 
-function onHandleDragStart(cardId: string, e: DragEvent) {
-  draggedCardId.value = cardId
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', cardId)
-  }
-}
-
-function onCardDragOver(cardId: string, e: DragEvent) {
-  if (!draggedCardId.value) return
-  e.preventDefault()
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  dragOverCardId.value = cardId
-}
-
-function onCardDragLeave() {
-  dragOverCardId.value = null
-}
-
-function onCardDrop(targetCardId: string, e: DragEvent) {
-  e.preventDefault()
-  const srcId = draggedCardId.value
-  if (!srcId || srcId === targetCardId) { draggedCardId.value = null; dragOverCardId.value = null; return }
-  const order = [...cardOrder.value]
-  const srcIdx = order.indexOf(srcId)
-  const tgtIdx = order.indexOf(targetCardId)
-  if (srcIdx === -1 || tgtIdx === -1) return
-  order.splice(srcIdx, 1)
-  order.splice(tgtIdx, 0, srcId)
-  cardOrder.value = order
-  draggedCardId.value = null
-  dragOverCardId.value = null
-  saveLayout()
-}
-
-function onDragEnd() {
-  draggedCardId.value = null
-  dragOverCardId.value = null
-}
 // ─── Global Search ──────────────────────────────────────────
 function highlightText(text: string): string {
   if (!globalSearch.value.trim() || !text) return text
@@ -489,9 +450,9 @@ function cardHasMatch(cardId: string): boolean {
         <div class="flex items-center gap-2 w-full overflow-hidden">
           <!-- Rich header info -->
           <div class="flex items-center gap-2 min-w-0 flex-1 overflow-x-auto scrollbar-none">
-            <NuxtLink to="/projects/all-projects" class="shrink-0 size-7 rounded-lg border flex items-center justify-center hover:bg-muted transition-colors">
+            <button class="shrink-0 size-7 rounded-lg border flex items-center justify-center hover:bg-muted transition-colors" @click="goBack">
               <Icon name="i-lucide-arrow-left" class="size-3.5 text-muted-foreground" />
-            </NuxtLink>
+            </button>
             <Separator orientation="vertical" class="h-4 shrink-0" />
             <span class="text-sm font-semibold truncate shrink-0">{{ customerName }}</span>
             <span class="text-muted-foreground text-xs shrink-0">/</span>
@@ -532,7 +493,7 @@ function cardHasMatch(cardId: string): boolean {
             </div>
             <p class="font-semibold text-lg">{{ error }}</p>
             <div class="flex gap-2">
-              <Button variant="outline" @click="navigateTo('/projects/all-projects')"><Icon name="i-lucide-arrow-left" class="mr-1 size-4" /> Go Back</Button>
+              <Button variant="outline" @click="goBack"><Icon name="i-lucide-arrow-left" class="mr-1 size-4" /> Go Back</Button>
               <Button @click="fetchProject"><Icon name="i-lucide-refresh-cw" class="mr-1 size-4" /> Retry</Button>
             </div>
           </div>
@@ -549,39 +510,114 @@ function cardHasMatch(cardId: string): boolean {
 
       <!-- Content -->
       <div v-else-if="project" class="flex-1 min-h-0 overflow-auto">
+        <!-- Sub-header Action Bar -->
+        <div class="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border/40">
+          <div class="flex items-center gap-1.5 px-4 py-2 overflow-x-auto scrollbar-none">
+            <button
+              class="action-btn action-btn-danger"
+              title="Delete Project"
+              @click="toast.info('Delete: set TempDeleted=true')"
+            >
+              <Icon name="i-lucide-trash-2" class="size-3.5" />
+              <span>Delete</span>
+            </button>
+            <button
+              class="action-btn"
+              title="Edit Project"
+              @click="toast.info('Edit Project – coming soon')"
+            >
+              <Icon name="i-lucide-pencil" class="size-3.5" />
+              <span>Edit Project</span>
+            </button>
+            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <button
+              class="action-btn"
+              title="Add Event"
+              @click="toast.info('Add Event – coming soon')"
+            >
+              <Icon name="i-lucide-calendar-plus" class="size-3.5" />
+              <span>Add Event</span>
+            </button>
+            <button
+              class="action-btn"
+              title="Add Notes"
+              @click="toast.info('Add Notes – coming soon')"
+            >
+              <Icon name="i-lucide-sticky-note" class="size-3.5" />
+              <span>Add Notes</span>
+            </button>
+            <button
+              class="action-btn"
+              title="Add Chat"
+              @click="toast.info('Add Chat – coming soon')"
+            >
+              <Icon name="i-lucide-message-circle-plus" class="size-3.5" />
+              <span>Add Chat</span>
+            </button>
+            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <button
+              class="action-btn"
+              title="Project Status"
+              @click="toast.info('Project Status – coming soon')"
+            >
+              <Icon name="i-lucide-signal" class="size-3.5" />
+              <span>Project Status</span>
+            </button>
+            <button
+              class="action-btn"
+              title="New Payment"
+              @click="toast.info('New Payment – coming soon')"
+            >
+              <Icon name="i-lucide-credit-card" class="size-3.5" />
+              <span>New Payment</span>
+            </button>
+            <button
+              class="action-btn"
+              title="Add Finance"
+              @click="toast.info('Add Finance – coming soon')"
+            >
+              <Icon name="i-lucide-banknote" class="size-3.5" />
+              <span>Add Finance</span>
+            </button>
+            <div class="w-px h-5 bg-border/50 mx-0.5 shrink-0" />
+            <button
+              class="action-btn"
+              title="Add Permit"
+              @click="toast.info('Add Permit – coming soon')"
+            >
+              <Icon name="i-lucide-stamp" class="size-3.5" />
+              <span>Add Permit</span>
+            </button>
+            <button
+              class="action-btn"
+              title="Add Document"
+              @click="toast.info('Add Document – coming soon')"
+            >
+              <Icon name="i-lucide-file-plus" class="size-3.5" />
+              <span>Add Document</span>
+            </button>
+          </div>
+        </div>
+
         <div class="p-4 md:p-5">
 
-          <!-- ═══ DRAG & DROP CARD GRID ═══ -->
+          <!-- ═══ FIXED CARD GRID ═══ -->
           <div class="dashboard-grid">
             <div
               v-for="card in orderedCards"
               :key="card.id"
               class="dashboard-card"
               :class="{
-                'is-dragging': draggedCardId === card.id,
-                'is-drag-over': dragOverCardId === card.id && draggedCardId !== card.id,
                 'has-search-match': cardHasMatch(card.id),
                 'no-search-match': globalSearch.trim() && !cardHasMatch(card.id),
               }"
               :style="{ gridColumn: `span ${gridColSpan(card.id)}` }"
-              @dragover="onCardDragOver(card.id, $event)"
-              @dragleave="onCardDragLeave"
-              @drop="onCardDrop(card.id, $event)"
-              @dragend="onDragEnd"
             >
               <div class="card-inner">
                 <!-- Card Header with drag handle -->
                 <div class="card-header-bar">
                   <div class="card-accent" :class="card.accent" />
                   <div class="card-header-content">
-                    <div
-                      class="drag-handle"
-                      title="Drag to reorder"
-                      draggable="true"
-                      @dragstart.stop="onHandleDragStart(card.id, $event)"
-                    >
-                      <Icon name="i-lucide-grip-vertical" class="size-3.5 text-muted-foreground/40" />
-                    </div>
                     <div class="card-icon-wrap" :class="`bg-gradient-to-br ${card.accent}`">
                       <Icon :name="card.icon" class="size-3.5 text-white" />
                     </div>
@@ -862,23 +898,6 @@ function cardHasMatch(cardId: string): boolean {
   gap: 8px;
 }
 
-.drag-handle {
-  cursor: grab;
-  padding: 4px 2px;
-  border-radius: 6px;
-  transition: background 0.15s ease, color 0.15s ease;
-  display: flex;
-  align-items: center;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.drag-handle:hover {
-  background: hsl(var(--muted));
-}
-.drag-handle:hover .size-3\.5 {
-  color: hsl(var(--foreground) / 0.7) !important;
-}
-.drag-handle:active { cursor: grabbing; }
 
 .card-icon-wrap {
   width: 26px; height: 26px;
@@ -1030,5 +1049,42 @@ function cardHasMatch(cardId: string): boolean {
   border-left: 2px solid hsl(var(--primary) / 0.4);
   padding-left: 8px !important;
   border-radius: 4px;
+}
+
+/* ─── Action Bar Buttons ─────────────────────────────────── */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.action-btn:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px -1px hsl(var(--foreground) / 0.06);
+}
+.action-btn:active {
+  transform: translateY(0);
+}
+.action-btn-danger {
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.2);
+}
+.action-btn-danger:hover {
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.3);
 }
 </style>
