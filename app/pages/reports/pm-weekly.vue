@@ -425,7 +425,7 @@ function downloadPDF() {
       </div>
 
       <!-- Scrollable content -->
-      <div v-if="!sidebarCollapsed" class="flex-1 overflow-y-auto p-3 space-y-5">
+      <div v-if="!sidebarCollapsed" class="flex-1 overflow-y-auto p-3 pr-5 pb-8 space-y-5">
         <!-- Filters section -->
         <div class="space-y-3">
           <h3 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filters</h3>
