@@ -29,6 +29,7 @@ store.init()
 
 const isMounted = ref(false)
 const globalSearch = ref('')
+const showFilesModal = ref(false)
 onMounted(() => { isMounted.value = true })
 
 // Project from store
@@ -591,6 +592,14 @@ function cardHasMatch(cardId: string): boolean {
               <Icon name="i-lucide-file-plus" class="size-3.5" />
               <span>Add Document</span>
             </button>
+            <button
+              class="action-btn"
+              title="Project Folder"
+              @click="showFilesModal = true"
+            >
+              <Icon name="i-lucide-folder-open" class="size-3.5" />
+              <span>Project Folder</span>
+            </button>
           </div>
         </div>
 
@@ -850,6 +859,14 @@ function cardHasMatch(cardId: string): boolean {
       </div>
     </div>
   </ProjectsLayout>
+
+  <!-- Google Drive Files Modal -->
+  <CustomerFilesModal
+    v-if="project"
+    v-model:open="showFilesModal"
+    :customer-name="(customerNameMap[project['Customer ID']] || project['Customer name'] || '') + ' — ' + projectId"
+    :drive-link="project['Project Folder'] || ''"
+  />
 </template>
 
 <style scoped>

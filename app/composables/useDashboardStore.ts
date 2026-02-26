@@ -97,6 +97,33 @@ async function _fetchAll() {
         if (salesRepsData.success) _salesReps.value = salesRepsData.salesReps
         if (chatProjData.success) _chatProjects.value = chatProjData.projects
         if (rolesData.success) _roles.value = rolesData.roles
+
+        // ─── Normalize casing for consistent display ────────────
+        const tc = (s: string) => s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        const normalizeFields = [
+            'Project Status', 'Job Status', 'SSA Status', 'Solar Install Status',
+            'MPU Installed Status', 'Battery Installed Status', 'Completion Status',
+            'Final Status', 'PTO Status', 'Fire Approval Needed',
+            'Branch Name', 'Project Type',
+        ]
+        _projects.value = _projects.value.map((p: any) => {
+            const copy = { ...p }
+            for (const field of normalizeFields) {
+                if (copy[field] && typeof copy[field] === 'string') {
+                    copy[field] = copy[field].split(',').map((part: string) => tc(part.trim())).join(', ')
+                }
+            }
+            return copy
+        })
+
+        // Normalize customer names in raw data
+        _customers.value = _customers.value.map((c: any) => {
+            const copy = { ...c }
+            if (copy['First Name'] && typeof copy['First Name'] === 'string') copy['First Name'] = tc(copy['First Name'])
+            if (copy['Last Name'] && typeof copy['Last Name'] === 'string') copy['Last Name'] = tc(copy['Last Name'])
+            return copy
+        })
+
         _buildMaps()
         _lastFetched.value = Date.now()
     }
