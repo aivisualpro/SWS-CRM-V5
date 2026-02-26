@@ -44,13 +44,14 @@ function _buildMaps() {
             ]),
     )
 
-    // Customer name map (Customer ID → display name)
+    // Customer name map (Customer ID → display name, title-cased)
+    const titleCase = (s: string) => s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     _customerNameMap.value = Object.fromEntries(
         _customers.value
             .filter((c: any) => c['Customer ID'])
             .map((c: any) => [
                 c['Customer ID'],
-                [c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID'],
+                titleCase([c['First Name'], c['Last Name']].filter(Boolean).join(' ') || c['Customer ID']),
             ]),
     )
 

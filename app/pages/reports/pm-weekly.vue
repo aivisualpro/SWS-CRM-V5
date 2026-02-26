@@ -7,7 +7,19 @@ const { projects, notes, userNameMap, customerNameMap, init, refresh } = useDash
 init()
 
 const isMounted = ref(false)
-onMounted(() => { isMounted.value = true })
+onMounted(() => {
+  isMounted.value = true
+  document.addEventListener('click', handleClickOutside)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+const statusDropdownRef = ref<HTMLElement | null>(null)
+function handleClickOutside(e: MouseEvent) {
+  if (statusDropdownRef.value && !statusDropdownRef.value.contains(e.target as Node)) {
+    statusDropdownOpen.value = false
+  }
+}
 
 // ─── Filters ────────────────────────────────────────────────
 const now = new Date()
@@ -20,12 +32,12 @@ sunday.setHours(23, 59, 59, 999)
 
 const filterDateFrom = ref(monday.toISOString().slice(0, 10))
 const filterDateTo = ref(sunday.toISOString().slice(0, 10))
-const filterProjectStatus = ref('')
+const filterProjectStatus = ref<string[]>([])
 const filterJobStatus = ref('')
 const filterBranch = ref('')
 
 const filtersActive = computed(() =>
-  filterProjectStatus.value || filterJobStatus.value || filterBranch.value
+  filterProjectStatus.value.length > 0 || filterJobStatus.value || filterBranch.value
   || filterDateFrom.value !== monday.toISOString().slice(0, 10)
   || filterDateTo.value !== sunday.toISOString().slice(0, 10),
 )
@@ -33,7 +45,7 @@ const filtersActive = computed(() =>
 function resetFilters() {
   filterDateFrom.value = monday.toISOString().slice(0, 10)
   filterDateTo.value = sunday.toISOString().slice(0, 10)
-  filterProjectStatus.value = ''
+  filterProjectStatus.value = []
   filterJobStatus.value = ''
   filterBranch.value = ''
 }
@@ -48,9 +60,36 @@ function uniqueSorted(key: string) {
   return Array.from(vals).sort()
 }
 
-const projectStatuses = computed(() => uniqueSorted('Project Status'))
+// Extract unique individual statuses (split comma-separated combos)
+const projectStatuses = computed(() => {
+  const vals = new Set<string>()
+  for (const p of projects.value) {
+    const v = p['Project Status']
+    if (v && typeof v === 'string') {
+      // Split by comma and trim each part
+      v.split(',').forEach((part: string) => {
+        const trimmed = part.trim()
+        if (trimmed) vals.add(trimmed)
+      })
+    }
+  }
+  return Array.from(vals).sort()
+})
 const jobStatuses = computed(() => uniqueSorted('Job Status'))
 const branches = computed(() => uniqueSorted('Branch Name'))
+
+// Project Status multi-select helpers
+const statusDropdownOpen = ref(false)
+
+function toggleProjectStatus(status: string) {
+  const idx = filterProjectStatus.value.indexOf(status)
+  if (idx >= 0) filterProjectStatus.value = filterProjectStatus.value.filter(s => s !== status)
+  else filterProjectStatus.value = [...filterProjectStatus.value, status]
+}
+
+function clearProjectStatuses() {
+  filterProjectStatus.value = []
+}
 
 // ─── Parse helpers ──────────────────────────────────────────
 function parseDate(val: any): Date | null {
@@ -84,8 +123,11 @@ const filteredProjects = computed(() => {
       return true
     })
   }
-  if (filterProjectStatus.value) {
-    list = list.filter((p: any) => p['Project Status'] === filterProjectStatus.value)
+  if (filterProjectStatus.value.length > 0) {
+    list = list.filter((p: any) => {
+      const ps = p['Project Status'] || ''
+      return filterProjectStatus.value.some((s: string) => ps.includes(s))
+    })
   }
   if (filterJobStatus.value) {
     list = list.filter((p: any) => p['Job Status'] === filterJobStatus.value)
@@ -349,7 +391,7 @@ function downloadPDF() {
 </head><body>
 <h1>Project Weekly Report</h1>
 <p class="subtitle">Report Date: ${reportDate}</p>
-<p class="report-date">Period: ${filterDateFrom.value || 'All'} to ${filterDateTo.value || 'All'}${filterBranch.value ? ' \u2022 Branch: ' + filterBranch.value : ''}${filterProjectStatus.value ? ' \u2022 Status: ' + filterProjectStatus.value : ''}${filterJobStatus.value ? ' \u2022 Job: ' + filterJobStatus.value : ''} \u2022 Total: ${rows.length} projects</p>
+<p class="report-date">Period: ${filterDateFrom.value || 'All'} to ${filterDateTo.value || 'All'}${filterBranch.value ? ' \u2022 Branch: ' + filterBranch.value : ''}${filterProjectStatus.value.length > 0 ? ' \u2022 Status: ' + filterProjectStatus.value.join(', ') : ''}${filterJobStatus.value ? ' \u2022 Job: ' + filterJobStatus.value : ''} \u2022 Total: ${rows.length} projects</p>
 <table>
   <thead>
     <tr>
@@ -398,7 +440,7 @@ function downloadPDF() {
     <!-- ═══ Left Panel: Filters + Summary ═══ -->
     <div
       class="shrink-0 border-r bg-card/50 flex flex-col min-h-0 transition-all duration-200"
-      :class="sidebarCollapsed ? 'w-12' : 'w-[280px]'"
+      :class="sidebarCollapsed ? 'w-12' : 'w-[260px]'"
     >
       <!-- Header with collapse & reset -->
       <div class="flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
@@ -448,20 +490,52 @@ function downloadPDF() {
             <Input v-model="filterDateTo" type="date" class="h-8 text-xs" />
           </div>
 
-          <!-- Project Status -->
+          <!-- Project Status (multi-select) -->
           <div class="space-y-1">
             <label class="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Icon name="i-lucide-activity" class="size-3" />
               Project Status
             </label>
-            <select
-              v-model="filterProjectStatus"
-              class="w-full h-8 px-2 pr-7 rounded-lg border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
-              style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 6px center;"
-            >
-              <option value="">All Statuses</option>
-              <option v-for="s in projectStatuses" :key="s" :value="s">{{ s }}</option>
-            </select>
+            <div ref="statusDropdownRef" class="relative">
+              <button
+                type="button"
+                class="w-full h-8 px-2 pr-7 rounded-lg border border-border bg-background text-xs text-left outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer truncate"
+                @click="statusDropdownOpen = !statusDropdownOpen"
+              >
+                {{ filterProjectStatus.length === 0 ? 'All Statuses' : filterProjectStatus.length === 1 ? filterProjectStatus[0] : `${filterProjectStatus.length} selected` }}
+              </button>
+              <Icon name="i-lucide-chevron-down" class="absolute right-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
+
+              <!-- Dropdown -->
+              <div
+                v-if="statusDropdownOpen"
+                class="absolute left-0 right-0 top-9 z-50 max-h-[240px] overflow-y-auto rounded-lg border bg-popover shadow-lg"
+              >
+                <!-- Clear all -->
+                <button
+                  v-if="filterProjectStatus.length > 0"
+                  type="button"
+                  class="w-full text-left px-2.5 py-1.5 text-[10px] text-destructive hover:bg-muted/60 border-b"
+                  @click="clearProjectStatuses()"
+                >
+                  ✕ Clear all ({{ filterProjectStatus.length }})
+                </button>
+                <!-- Options -->
+                <label
+                  v-for="s in projectStatuses"
+                  :key="s"
+                  class="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-muted/60 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="filterProjectStatus.includes(s)"
+                    class="size-3.5 rounded border-border accent-primary"
+                    @change="toggleProjectStatus(s)"
+                  >
+                  <span class="truncate">{{ s }}</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <!-- Job Status -->
