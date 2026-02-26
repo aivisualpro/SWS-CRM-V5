@@ -17,6 +17,9 @@ const _finance = ref<any[]>([])
 const _tasks = ref<any[]>([])
 const _payments = ref<any[]>([])
 const _tickets = ref<any[]>([])
+const _vendors = ref<any[]>([])
+const _salesReps = ref<any[]>([])
+const _notifications = ref<any[]>([])
 
 const _userNameMap = ref<Record<string, string>>({})
 const _customerNameMap = ref<Record<string, string>>({})
@@ -61,7 +64,7 @@ async function _fetchAll() {
     if (_fetching.value) return
     _fetching.value = true
     try {
-        const [projData, eventData, userData, custData, notesData, permitsData, finData, tasksData, paymentsData, ticketsData] = await Promise.all([
+        const [projData, eventData, userData, custData, notesData, permitsData, finData, tasksData, paymentsData, ticketsData, vendorsData, salesRepsData, notifData] = await Promise.all([
             $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/projects').catch(() => ({ success: false, projects: [] })),
             $fetch<{ success: boolean, events: any[] }>('/api/bigquery/events').catch(() => ({ success: false, events: [] })),
             $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
@@ -72,6 +75,9 @@ async function _fetchAll() {
             $fetch<{ success: boolean, tasks: any[] }>('/api/bigquery/tasks').catch(() => ({ success: false, tasks: [] })),
             $fetch<{ success: boolean, payments: any[] }>('/api/bigquery/payments').catch(() => ({ success: false, payments: [] })),
             $fetch<{ success: boolean, tickets: any[] }>('/api/bigquery/tickets').catch(() => ({ success: false, tickets: [] })),
+            $fetch<{ success: boolean, vendors: any[] }>('/api/bigquery/vendors').catch(() => ({ success: false, vendors: [] })),
+            $fetch<{ success: boolean, salesReps: any[] }>('/api/bigquery/sales-reps').catch(() => ({ success: false, salesReps: [] })),
+            $fetch<{ success: boolean, notifications: any[] }>('/api/bigquery/notifications', { params: { limit: 1000 } }).catch(() => ({ success: false, notifications: [] })),
         ])
         if (projData.success) _projects.value = projData.projects
         if (eventData.success) _events.value = eventData.events
@@ -83,6 +89,9 @@ async function _fetchAll() {
         if (tasksData.success) _tasks.value = tasksData.tasks
         if (paymentsData.success) _payments.value = paymentsData.payments
         if (ticketsData.success) _tickets.value = ticketsData.tickets
+        if (vendorsData.success) _vendors.value = vendorsData.vendors
+        if (salesRepsData.success) _salesReps.value = salesRepsData.salesReps
+        if (notifData.success) _notifications.value = notifData.notifications
         _buildMaps()
         _lastFetched.value = Date.now()
     }
@@ -128,6 +137,9 @@ export function useDashboardStore() {
         tasks: readonly(_tasks),
         payments: readonly(_payments),
         tickets: readonly(_tickets),
+        vendors: readonly(_vendors),
+        salesReps: readonly(_salesReps),
+        notifications: readonly(_notifications),
         userNameMap: readonly(_userNameMap),
         customerNameMap: readonly(_customerNameMap),
         projectMap: readonly(_projectMap),

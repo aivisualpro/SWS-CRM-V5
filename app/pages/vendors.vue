@@ -1,24 +1,9 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
-
 const { setHeader } = usePageHeader()
-setHeader({ title: 'Vendors', icon: 'i-lucide-building-2' })
+const { vendors, init } = useDashboardStore()
+init()
 
-const loading = ref(true)
-const vendors = ref<any[]>([])
 const search = ref('')
-
-async function fetchVendors() {
-  loading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, vendors: any[] }>('/api/bigquery/vendors')
-    if (data.success) vendors.value = data.vendors
-  }
-  catch { toast.error('Failed to load vendors') }
-  finally { loading.value = false }
-}
-
-onMounted(fetchVendors)
 
 const filteredVendors = computed(() => {
   if (!search.value.trim()) return vendors.value
@@ -32,6 +17,11 @@ const filteredVendors = computed(() => {
   )
 })
 
+// Update header with count
+watchEffect(() => {
+  setHeader({ title: 'Vendors', icon: 'i-lucide-building-2', description: `${filteredVendors.value.length} vendors` })
+})
+
 const columns = [
   { key: 'Vendor Name', label: 'Vendor Name', width: '250px' },
   { key: 'Branch', label: 'Branch', width: '160px' },
@@ -43,17 +33,8 @@ const columns = [
 
 <template>
   <div class="flex flex-col h-[calc(100dvh-54px)]">
-    <!-- Header bar -->
-    <div class="flex items-center justify-between gap-4 px-5 py-3 border-b border-border/50 bg-card/30 backdrop-blur-sm shrink-0">
-      <div class="flex items-center gap-3">
-        <div class="size-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
-          <Icon name="i-lucide-building-2" class="size-4.5 text-white" />
-        </div>
-        <div>
-          <h2 class="text-sm font-bold">Vendors</h2>
-          <p class="text-[11px] text-muted-foreground">{{ filteredVendors.length }} vendors</p>
-        </div>
-      </div>
+    <!-- Toolbar -->
+    <div class="flex items-center justify-end px-5 py-2 border-b border-border/40 shrink-0">
       <div class="relative">
         <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
         <input
@@ -64,16 +45,8 @@ const columns = [
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <div class="flex flex-col items-center gap-2">
-        <Icon name="i-lucide-loader-2" class="size-7 animate-spin text-primary" />
-        <p class="text-xs text-muted-foreground">Loading vendors…</p>
-      </div>
-    </div>
-
     <!-- Table -->
-    <div v-else class="flex-1 overflow-auto">
+    <div class="flex-1 overflow-auto">
       <Table>
         <TableHeader class="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
           <TableRow>

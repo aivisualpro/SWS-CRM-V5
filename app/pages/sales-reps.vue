@@ -1,36 +1,14 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
-
 const { setHeader } = usePageHeader()
-setHeader({ title: 'Sales Reps', icon: 'i-lucide-user-round-search' })
+const { salesReps, vendors, init } = useDashboardStore()
+init()
 
-const loading = ref(true)
-const salesReps = ref<any[]>([])
-const vendorsMap = ref<Record<string, string>>({})
 const search = ref('')
 
-async function fetchData() {
-  loading.value = true
-  try {
-    const [repData, vendorData] = await Promise.all([
-      $fetch<{ success: boolean, salesReps: any[] }>('/api/bigquery/sales-reps'),
-      $fetch<{ success: boolean, vendors: any[] }>('/api/bigquery/vendors'),
-    ])
-    if (repData.success) salesReps.value = repData.salesReps
-    if (vendorData.success) {
-      vendorsMap.value = Object.fromEntries(
-        vendorData.vendors.filter((v: any) => v['Row ID']).map((v: any) => [v['Row ID'], v['Vendor Name']]),
-      )
-    }
-  }
-  catch { toast.error('Failed to load sales reps') }
-  finally { loading.value = false }
-}
-
-onMounted(fetchData)
-
 function resolveVendor(id: string): string {
-  return vendorsMap.value[id] || id || '—'
+  if (!id) return '—'
+  const v = vendors.value.find((v: any) => v['Row ID'] === id)
+  return v ? v['Vendor Name'] : id
 }
 
 const filteredReps = computed(() => {
@@ -45,6 +23,10 @@ const filteredReps = computed(() => {
   )
 })
 
+watchEffect(() => {
+  setHeader({ title: 'Sales Reps', icon: 'i-lucide-user-round-search', description: `${filteredReps.value.length} reps` })
+})
+
 const columns = [
   { key: 'First Name', label: 'First Name', width: '160px' },
   { key: 'Last Name', label: 'Last Name', width: '160px' },
@@ -56,17 +38,8 @@ const columns = [
 
 <template>
   <div class="flex flex-col h-[calc(100dvh-54px)]">
-    <!-- Header bar -->
-    <div class="flex items-center justify-between gap-4 px-5 py-3 border-b border-border/50 bg-card/30 backdrop-blur-sm shrink-0">
-      <div class="flex items-center gap-3">
-        <div class="size-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-500 flex items-center justify-center">
-          <Icon name="i-lucide-user-round-search" class="size-4.5 text-white" />
-        </div>
-        <div>
-          <h2 class="text-sm font-bold">Sales Reps</h2>
-          <p class="text-[11px] text-muted-foreground">{{ filteredReps.length }} reps</p>
-        </div>
-      </div>
+    <!-- Toolbar -->
+    <div class="flex items-center justify-end px-5 py-2 border-b border-border/40 shrink-0">
       <div class="relative">
         <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
         <input
@@ -77,16 +50,8 @@ const columns = [
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <div class="flex flex-col items-center gap-2">
-        <Icon name="i-lucide-loader-2" class="size-7 animate-spin text-primary" />
-        <p class="text-xs text-muted-foreground">Loading sales reps…</p>
-      </div>
-    </div>
-
     <!-- Table -->
-    <div v-else class="flex-1 overflow-auto">
+    <div class="flex-1 overflow-auto">
       <Table>
         <TableHeader class="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
           <TableRow>

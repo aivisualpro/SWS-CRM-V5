@@ -1,30 +1,10 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
-
 const { setHeader } = usePageHeader()
-setHeader({ title: 'Notifications', icon: 'i-lucide-bell' })
+const { notifications, init } = useDashboardStore()
+init()
 
-const store = useDashboardStore()
-store.init()
-
-const loading = ref(true)
-const notifications = ref<any[]>([])
 const search = ref('')
 const filterType = ref('')
-
-async function fetchNotifications() {
-  loading.value = true
-  try {
-    const data = await $fetch<{ success: boolean, notifications: any[] }>('/api/bigquery/notifications', {
-      params: { limit: 1000 },
-    })
-    if (data.success) notifications.value = data.notifications
-  }
-  catch { toast.error('Failed to load notifications') }
-  finally { loading.value = false }
-}
-
-onMounted(fetchNotifications)
 
 // Unique notification types
 const notificationTypes = computed(() => {
@@ -106,6 +86,10 @@ const filteredNotifications = computed(() => {
   return list
 })
 
+watchEffect(() => {
+  setHeader({ title: 'Notifications', icon: 'i-lucide-bell', description: `${filteredNotifications.value.length} notifications` })
+})
+
 // Infinite scroll
 const CHUNK = 50
 const visibleCount = ref(CHUNK)
@@ -126,47 +110,28 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-[calc(100dvh-54px)]">
-    <!-- Header bar -->
-    <div class="flex items-center justify-between gap-4 px-5 py-3 border-b border-border/50 bg-card/30 backdrop-blur-sm shrink-0">
-      <div class="flex items-center gap-3">
-        <div class="size-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-          <Icon name="i-lucide-bell" class="size-4.5 text-white" />
-        </div>
-        <div>
-          <h2 class="text-sm font-bold">Notifications</h2>
-          <p class="text-[11px] text-muted-foreground">{{ filteredNotifications.length }} notifications</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <select
-          v-model="filterType"
-          class="h-8 px-2 pr-7 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer max-w-[200px]"
-          style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 6px center;"
-        >
-          <option value="">All Types</option>
-          <option v-for="t in notificationTypes" :key="t" :value="t">{{ t }}</option>
-        </select>
-        <div class="relative">
-          <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-          <input
-            v-model="search"
-            placeholder="Search…"
-            class="h-8 w-[220px] pl-8 pr-3 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Loading -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <div class="flex flex-col items-center gap-2">
-        <Icon name="i-lucide-loader-2" class="size-7 animate-spin text-primary" />
-        <p class="text-xs text-muted-foreground">Loading notifications…</p>
+    <!-- Toolbar -->
+    <div class="flex items-center justify-end gap-2 px-5 py-2 border-b border-border/40 shrink-0">
+      <select
+        v-model="filterType"
+        class="h-8 px-2 pr-7 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer max-w-[200px]"
+        style="background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 6px center;"
+      >
+        <option value="">All Types</option>
+        <option v-for="t in notificationTypes" :key="t" :value="t">{{ t }}</option>
+      </select>
+      <div class="relative">
+        <Icon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
+        <input
+          v-model="search"
+          placeholder="Search…"
+          class="h-8 w-[220px] pl-8 pr-3 rounded-lg border border-border/50 bg-muted/30 text-xs outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+        />
       </div>
     </div>
 
     <!-- Notification list -->
-    <div v-else class="flex-1 overflow-auto">
+    <div class="flex-1 overflow-auto">
       <div class="max-w-4xl mx-auto px-4 py-4 space-y-2">
         <div
           v-for="(n, idx) in visibleNotifications"
