@@ -64,6 +64,13 @@ const newFolderName = ref('')
 const newFolderLoading = ref(false)
 const newFolderInputRef = ref<HTMLInputElement | null>(null)
 
+// Move state
+const movingFile = ref<DriveFile | null>(null)
+const movePickerStack = ref<{ id: string, name: string }[]>([])
+const movePickerFiles = ref<DriveFile[]>([])
+const movePickerLoading = ref(false)
+const moveLoading = ref(false)
+
 // ─── Extract root folder ID ───────────────────────────────────
 const rootFolderId = computed(() => {
   if (!props.driveLink) return null
@@ -359,7 +366,85 @@ async function confirmNewFolder() {
   }
 }
 
+// ─── Move ─────────────────────────────────────────────────────
+const movePickerCurrentId = computed(() =>
+  movePickerStack.value.length > 0
+    ? movePickerStack.value[movePickerStack.value.length - 1]!.id
+    : rootFolderId.value,
+)
+
+async function fetchMovePickerFiles(folderId: string) {
+  movePickerLoading.value = true
+  try {
+    const data = await $fetch<{ success: boolean, files: DriveFile[] }>(`/api/drive/files?folderId=${folderId}`)
+    // Only show folders in the picker, and exclude the item being moved
+    movePickerFiles.value = (data.files || []).filter(f =>
+      f.mimeType === FOLDER_MIME && f.id !== movingFile.value?.id,
+    )
+  }
+  catch {
+    movePickerFiles.value = []
+  }
+  finally {
+    movePickerLoading.value = false
+  }
+}
+
+function startMove(file: DriveFile, e: MouseEvent) {
+  e.stopPropagation()
+  movingFile.value = file
+  movePickerStack.value = []
+  fetchMovePickerFiles(rootFolderId.value!)
+}
+
+function cancelMove() {
+  movingFile.value = null
+  movePickerStack.value = []
+  movePickerFiles.value = []
+}
+
+function movePickerOpenFolder(folder: DriveFile) {
+  movePickerStack.value.push({ id: folder.id, name: folder.name })
+  fetchMovePickerFiles(folder.id)
+}
+
+function movePickerGoBack() {
+  movePickerStack.value.pop()
+  fetchMovePickerFiles(movePickerCurrentId.value!)
+}
+
+async function confirmMove(destinationId: string) {
+  if (!movingFile.value || !currentFolderId.value) return
+  if (destinationId === currentFolderId.value) {
+    toast.info('File is already in this folder')
+    return
+  }
+  moveLoading.value = true
+  try {
+    await $fetch('/api/drive/move', {
+      method: 'PATCH',
+      body: {
+        fileId: movingFile.value.id,
+        newParentId: destinationId,
+        oldParentId: currentFolderId.value,
+      },
+    })
+    toast.success(`"${movingFile.value.name}" moved successfully`)
+    // Remove from current list
+    currentFiles.value = currentFiles.value.filter(f => f.id !== movingFile.value!.id)
+    if (selectedFile.value?.id === movingFile.value.id) selectedFile.value = null
+    cancelMove()
+  }
+  catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to move')
+  }
+  finally {
+    moveLoading.value = false
+  }
+}
+
 // ─── File helpers ─────────────────────────────────────────────
+
 function isFolder(f: DriveFile) { return f.mimeType === FOLDER_MIME }
 function isImage(f: DriveFile) { return IMAGE_MIMES.includes(f.mimeType) }
 
@@ -741,6 +826,128 @@ watch(() => props.open, (val) => {
                 </div>
               </Transition>
 
+              <!-- ─── MOVE PICKER PANEL ─── -->
+              <Transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 translate-x-full"
+                enter-to-class="opacity-100 translate-x-0"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 translate-x-full"
+              >
+                <div
+                  v-if="movingFile"
+                  class="absolute inset-0 z-40 flex"
+                >
+                  <!-- Dim left side -->
+                  <div class="flex-1 bg-black/30 backdrop-blur-sm" @click="cancelMove" />
+                  <!-- Picker panel -->
+                  <div class="w-80 flex flex-col bg-card border-l shadow-2xl">
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 px-4 py-3 border-b bg-gradient-to-r from-violet-500/5 to-card">
+                      <div class="size-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                        <Icon name="i-lucide-folder-symlink" class="size-4 text-violet-500" />
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold">Move to…</p>
+                        <p class="text-[11px] text-muted-foreground truncate">"{{ movingFile.name }}"</p>
+                      </div>
+                      <button class="size-7 rounded-lg hover:bg-muted flex items-center justify-center" @click="cancelMove">
+                        <Icon name="i-lucide-x" class="size-4 text-muted-foreground" />
+                      </button>
+                    </div>
+
+                    <!-- Breadcrumb nav within picker -->
+                    <div class="flex items-center gap-1 px-4 py-2 border-b bg-muted/20 text-xs text-muted-foreground overflow-x-auto no-scrollbar">
+                      <button class="hover:text-foreground font-medium shrink-0" @click="movePickerStack = []; fetchMovePickerFiles(rootFolderId!)">
+                        Root
+                      </button>
+                      <template v-for="(crumb, i) in movePickerStack" :key="crumb.id">
+                        <Icon name="i-lucide-chevron-right" class="size-3 shrink-0" />
+                        <button
+                          class="hover:text-foreground shrink-0 truncate max-w-[100px]"
+                          :class="i === movePickerStack.length - 1 ? 'text-foreground font-medium' : ''"
+                          @click="movePickerStack = movePickerStack.slice(0, i + 1); fetchMovePickerFiles(crumb.id)"
+                        >
+                          {{ crumb.name }}
+                        </button>
+                      </template>
+                    </div>
+
+                    <!-- Folder list -->
+                    <div class="flex-1 overflow-y-auto">
+                      <!-- Back button -->
+                      <button
+                        v-if="movePickerStack.length > 0"
+                        class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left border-b border-border/40"
+                        @click="movePickerGoBack"
+                      >
+                        <Icon name="i-lucide-arrow-left" class="size-4 text-muted-foreground" />
+                        <span class="text-sm text-muted-foreground">Go back</span>
+                      </button>
+
+                      <!-- Loading -->
+                      <div v-if="movePickerLoading" class="flex items-center justify-center py-10">
+                        <Icon name="i-lucide-loader-2" class="size-6 animate-spin text-muted-foreground" />
+                      </div>
+
+                      <!-- No subfolders -->
+                      <div v-else-if="movePickerFiles.length === 0" class="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
+                        <Icon name="i-lucide-folder-x" class="size-8 text-muted-foreground/30" />
+                        <p class="text-xs text-muted-foreground">No subfolders here</p>
+                      </div>
+
+                      <!-- Folder rows -->
+                      <button
+                        v-for="folder in movePickerFiles"
+                        :key="folder.id"
+                        class="group/pick w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left border-b border-border/30"
+                      >
+                        <div class="size-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 group-hover/pick:scale-105 transition-transform">
+                          <Icon name="i-lucide-folder" class="size-4 text-amber-500" />
+                        </div>
+                        <span class="text-sm flex-1 truncate">{{ folder.name }}</span>
+                        <div class="flex items-center gap-1 opacity-0 group-hover/pick:opacity-100 transition-opacity shrink-0">
+                          <!-- Drill in -->
+                          <button
+                            class="size-6 rounded flex items-center justify-center hover:bg-muted text-muted-foreground"
+                            title="Open folder"
+                            @click.stop="movePickerOpenFolder(folder)"
+                          >
+                            <Icon name="i-lucide-chevron-right" class="size-3.5" />
+                          </button>
+                          <!-- Move here -->
+                          <button
+                            class="h-6 px-2 rounded text-[11px] font-medium bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 transition-colors whitespace-nowrap"
+                            :disabled="moveLoading"
+                            @click.stop="confirmMove(folder.id)"
+                          >
+                            <Icon v-if="moveLoading" name="i-lucide-loader-2" class="size-3 animate-spin inline mr-0.5" />
+                            Move here
+                          </button>
+                        </div>
+                      </button>
+                    </div>
+
+                    <!-- Footer: move to current picker location -->
+                    <div class="border-t px-4 py-3">
+                      <Button
+                        class="w-full h-9 text-xs gap-2"
+                        :disabled="moveLoading || movePickerCurrentId === currentFolderId"
+                        @click="confirmMove(movePickerCurrentId!)"
+                      >
+                        <Icon v-if="moveLoading" name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                        <Icon v-else name="i-lucide-folder-symlink" class="size-3.5" />
+                        Move to
+                        <span class="font-semibold truncate max-w-[120px]">
+                          {{ movePickerStack.length > 0 ? movePickerStack[movePickerStack.length - 1]!.name : 'Root Folder' }}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+
               <!-- ─── FILE LIST PANEL ─── -->
               <div
                 class="flex flex-col min-h-0 overflow-hidden border-r transition-all duration-300 ease-in-out bg-card"
@@ -850,7 +1057,7 @@ watch(() => props.open, (val) => {
                     </span>
 
                     <!-- Action buttons -->
-                    <div class="shrink-0 flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity w-20 justify-end">
+                    <div class="shrink-0 flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity w-28 justify-end">
                       <!-- Rename (files & folders) -->
                       <button
                         class="size-7 rounded-lg flex items-center justify-center hover:bg-amber-500/10 text-amber-600 transition-colors"
@@ -858,6 +1065,15 @@ watch(() => props.open, (val) => {
                         @click.stop="startRename(file, $event)"
                       >
                         <Icon name="i-lucide-pencil-line" class="size-3.5" />
+                      </button>
+
+                      <!-- Move (files & folders) -->
+                      <button
+                        class="size-7 rounded-lg flex items-center justify-center hover:bg-violet-500/10 text-violet-500 transition-colors"
+                        title="Move to folder"
+                        @click.stop="startMove(file, $event)"
+                      >
+                        <Icon name="i-lucide-folder-symlink" class="size-3.5" />
                       </button>
 
                       <!-- Folder: open -->
@@ -928,6 +1144,15 @@ watch(() => props.open, (val) => {
                       >
                         <Icon name="i-lucide-pencil-line" class="size-3" />
                         Rename
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7 text-xs gap-1 rounded-lg text-violet-600"
+                        @click="startMove(selectedFile, $event)"
+                      >
+                        <Icon name="i-lucide-folder-symlink" class="size-3" />
+                        Move
                       </Button>
                       <Button
                         variant="outline"
