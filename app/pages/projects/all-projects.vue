@@ -264,27 +264,100 @@ const currencyColumns = ['Project Price', 'Contract Price', 'Project Net Amount'
 
 // ─── Highlight project on return from detail page ──────────
 const highlightId = ref('')
+const router = useRouter()
 
-onMounted(() => {
+function scrollAndHighlight(id: string) {
+  highlightId.value = id
+
+  // Expand visibleCount so the target row is in the DOM
+  const idx = sortedProjects.value.findIndex((p: any) => p['Project ID'] === id)
+  if (idx >= 0 && idx >= visibleCount.value) {
+    visibleCount.value = idx + CHUNK_SIZE
+  }
+
+  // Inject global keyframe if not already present
+  if (!document.getElementById('row-highlight-style')) {
+    const style = document.createElement('style')
+    style.id = 'row-highlight-style'
+    style.textContent = `
+      @keyframes rowHighlightPulse {
+        0%   { background-color: hsla(160,84%,39%,0.06); }
+        50%  { background-color: hsla(160,84%,39%,0.20); }
+        100% { background-color: hsla(160,84%,39%,0.06); }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      let retries = 0
+      const tryScroll = () => {
+        const el = document.getElementById(`project-row-${id}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          // Apply inline styles directly — bypasses all scoping issues
+          el.style.cssText = [
+            'animation: rowHighlightPulse 0.8s ease-in-out 4 !important',
+            'background-color: hsla(160,84%,39%,0.12) !important',
+            'box-shadow: inset 3px 0 0 hsl(160,84%,39%), inset 0 0 0 1px hsla(160,84%,39%,0.3) !important',
+            'transition: none !important',
+          ].join(';')
+          setTimeout(() => {
+            el.style.cssText = ''
+            highlightId.value = ''
+          }, 3200)
+        }
+        else if (retries < 20) {
+          retries++
+          setTimeout(tryScroll, 100)
+        }
+      }
+      tryScroll()
+    })
+  })
+}
+
+// Fires on EVERY navigation, including back — the key fix
+const stopRouterAfter = router.afterEach(() => {
   const id = sessionStorage.getItem('highlight-project')
   if (id) {
     sessionStorage.removeItem('highlight-project')
-    highlightId.value = id
-    // Wait for data to render, then scroll into view
-    const tryScroll = () => {
-      const el = document.getElementById(`project-row-${id}`)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        // Remove highlight after 3 seconds
-        setTimeout(() => { highlightId.value = '' }, 3000)
-      } else {
-        // Data might not be rendered yet, retry
-        setTimeout(tryScroll, 200)
-      }
+    // If data is already loaded, scroll immediately; otherwise wait for it
+    if (sortedProjects.value.length > 0) {
+      scrollAndHighlight(id)
     }
-    setTimeout(tryScroll, 300)
+    else {
+      const stop = watch(sortedProjects, (list) => {
+        if (list.length > 0) {
+          stop()
+          scrollAndHighlight(id)
+        }
+      })
+    }
   }
 })
+
+onMounted(() => {
+  // Also handle fresh page load (first mount)
+  const id = sessionStorage.getItem('highlight-project')
+  if (id) {
+    sessionStorage.removeItem('highlight-project')
+    if (sortedProjects.value.length > 0) {
+      scrollAndHighlight(id)
+    }
+    else {
+      const stop = watch(sortedProjects, (list) => {
+        if (list.length > 0) {
+          stop()
+          scrollAndHighlight(id)
+        }
+      })
+    }
+  }
+})
+
+onUnmounted(() => stopRouterAfter())
 </script>
 
 <template>
@@ -335,10 +408,8 @@ onMounted(() => {
               v-for="(project, idx) in visibleProjects"
               :id="`project-row-${project['Project ID']}`"
               :key="project['Project ID'] || idx"
-              class="group cursor-pointer transition-colors"
-              :class="highlightId === project['Project ID']
-                ? 'highlight-return-row'
-                : 'hover:bg-muted/50'"
+              class="group cursor-pointer transition-all duration-200"
+              :class="highlightId === project['Project ID'] ? '' : 'hover:bg-muted/50'"
               @click="navigateTo(`/projects/${project['Project ID']}`)"
             >
               <TableCell v-for="col in columns" :key="col.key">
@@ -499,14 +570,5 @@ onMounted(() => {
   overflow: visible !important;
 }
 
-.highlight-return-row {
-  animation: highlight-pulse 1s ease-in-out 3;
-  background: hsl(var(--primary) / 0.08);
-  border-left: 3px solid hsl(var(--primary));
-}
 
-@keyframes highlight-pulse {
-  0%, 100% { background: hsl(var(--primary) / 0.04); }
-  50% { background: hsl(var(--primary) / 0.12); }
-}
 </style>
