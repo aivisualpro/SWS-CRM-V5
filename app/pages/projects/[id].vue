@@ -30,6 +30,9 @@ store.init()
 const isMounted = ref(false)
 const globalSearch = ref('')
 const showFilesModal = ref(false)
+const showEditDialog = ref(false)
+const showDeleteConfirm = ref(false)
+const deleting = ref(false)
 onMounted(() => { isMounted.value = true })
 
 // Project from store
@@ -430,6 +433,31 @@ function cardHasMatch(cardId: string): boolean {
   }
   return false
 }
+
+// ─── Edit & Delete ──────────────────────────────────────────
+function onEditSaved() {
+  store.refresh()
+}
+
+async function deleteProject() {
+  deleting.value = true
+  try {
+    await $fetch('/api/bigquery/projects', {
+      method: 'DELETE',
+      body: { projectId: projectId.value },
+    })
+    toast.success('Project deleted')
+    showDeleteConfirm.value = false
+    router.push('/projects/all-projects')
+    store.refresh()
+  }
+  catch (e: any) {
+    toast.error(e.data?.statusMessage || 'Failed to delete project')
+  }
+  finally {
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -501,7 +529,7 @@ function cardHasMatch(cardId: string): boolean {
             <button
               class="action-btn action-btn-danger"
               title="Delete Project"
-              @click="toast.info('Delete: set TempDeleted=true')"
+              @click="showDeleteConfirm = true"
             >
               <Icon name="i-lucide-trash-2" class="size-3.5" />
               <span>Delete</span>
@@ -509,7 +537,7 @@ function cardHasMatch(cardId: string): boolean {
             <button
               class="action-btn"
               title="Edit Project"
-              @click="toast.info('Edit Project – coming soon')"
+              @click="showEditDialog = true"
             >
               <Icon name="i-lucide-pencil" class="size-3.5" />
               <span>Edit Project</span>
@@ -1012,6 +1040,41 @@ function cardHasMatch(cardId: string): boolean {
     :customer-name="(customerNameMap[project['Customer ID']] || project['Customer name'] || '') + ' — ' + projectId"
     :drive-link="project['Project Folder'] || ''"
   />
+
+  <!-- Edit Project Dialog -->
+  <ProjectFormDialog
+    v-if="project"
+    v-model:open="showEditDialog"
+    :project="project"
+    @saved="onEditSaved"
+  />
+
+  <!-- Delete Confirm Dialog -->
+  <Dialog v-model:open="showDeleteConfirm">
+    <DialogContent class="max-w-sm">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <div class="size-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <Icon name="i-lucide-alert-triangle" class="size-4 text-red-500" />
+          </div>
+          Delete Project
+        </DialogTitle>
+        <DialogDescription class="text-sm text-muted-foreground">
+          Are you sure you want to delete project <strong>{{ projectId }}</strong>? This action cannot be undone.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="flex justify-end gap-2 mt-4">
+        <Button variant="outline" size="sm" :disabled="deleting" @click="showDeleteConfirm = false">
+          Cancel
+        </Button>
+        <Button variant="destructive" size="sm" :disabled="deleting" @click="deleteProject">
+          <Icon v-if="deleting" name="i-lucide-loader-2" class="mr-1 size-3.5 animate-spin" />
+          <Icon v-else name="i-lucide-trash-2" class="mr-1 size-3.5" />
+          Delete
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <style scoped>

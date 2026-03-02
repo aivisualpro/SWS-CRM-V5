@@ -502,9 +502,6 @@ onUnmounted(() => stopRouterAfter())
                   <Icon :name="sortIcon(col.key)" class="size-3 opacity-60" />
                 </div>
               </TableHead>
-              <TableHead class="bg-card sticky right-0 z-20 w-[80px] min-w-[80px] shadow-[-2px_0_4px_-2px_hsl(var(--border))]">
-                Actions
-              </TableHead>
             </TableRow>
           </TableHeader>
 
@@ -621,31 +618,11 @@ onUnmounted(() => stopRouterAfter())
                   <span class="text-sm whitespace-nowrap">{{ cellValue(project, col.key) }}</span>
                 </template>
               </TableCell>
-
-              <!-- Actions (sticky right) -->
-              <TableCell class="sticky right-0 z-10 bg-card shadow-[-2px_0_4px_-2px_hsl(var(--border))]">
-                <div class="flex items-center gap-1">
-                  <button
-                    class="group/edit flex items-center justify-center size-7 rounded-lg transition-all duration-200 hover:bg-blue-500/10 hover:shadow-sm"
-                    title="Edit project"
-                    @click.stop="openEditForm(project)"
-                  >
-                    <Icon name="i-lucide-pencil" class="size-3.5 text-muted-foreground/50 group-hover/edit:text-blue-600 dark:group-hover/edit:text-blue-400 transition-colors" />
-                  </button>
-                  <button
-                    class="group/del flex items-center justify-center size-7 rounded-lg transition-all duration-200 hover:bg-red-500/10 hover:shadow-sm"
-                    title="Delete project"
-                    @click.stop="openDeleteConfirm(project)"
-                  >
-                    <Icon name="i-lucide-trash-2" class="size-3.5 text-muted-foreground/50 group-hover/del:text-red-500 transition-colors" />
-                  </button>
-                </div>
-              </TableCell>
             </TableRow>
 
             <!-- Empty State -->
             <TableRow v-if="visibleProjects.length === 0">
-              <TableCell :colspan="columns.length + 1" class="h-32 text-center">
+              <TableCell :colspan="columns.length" class="h-32 text-center">
                 <div class="flex flex-col items-center gap-2 text-muted-foreground">
                   <Icon name="i-lucide-folder-open" class="size-8" />
                   <p>No open projects found</p>
@@ -655,7 +632,7 @@ onUnmounted(() => stopRouterAfter())
 
             <!-- Infinite scroll sentinel -->
             <tr v-if="hasMore" ref="sentinelRef">
-              <td :colspan="columns.length + 1" class="h-10 text-center text-xs text-muted-foreground">
+              <td :colspan="columns.length" class="h-10 text-center text-xs text-muted-foreground">
                 Loading more…
               </td>
             </tr>
