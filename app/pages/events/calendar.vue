@@ -59,7 +59,7 @@ const daySheetEvents = computed(() => {
     || (e['Event Status'] || '').toLowerCase().includes(q)
     || (e['Customer Address'] || e['Event Address'] || '').toLowerCase().includes(q)
     || (e.Branch || '').toLowerCase().includes(q)
-    || (e.Vendor || '').toLowerCase().includes(q)
+    || resolveVendor(e.Vendor || '').toLowerCase().includes(q)
     || (e['Event Description'] || '').toLowerCase().includes(q),
   )
 })
@@ -92,6 +92,22 @@ const userNameMap = computed(() => ({ ...store.userNameMap.value }))
 function resolveName(email: string): string {
   if (!email) return ''
   return userNameMap.value[email.toLowerCase()] || email
+}
+
+// ── Vendor name lookup from store ────────────────────────────
+const vendorNameMap = computed(() => {
+  const map: Record<string, string> = {}
+  for (const v of (store.vendors.value || [])) {
+    const rowId = v['Row ID'] || v['row_id'] || ''
+    const name = v['Vendor Name'] || v['Company'] || ''
+    if (rowId && name) map[rowId] = name
+  }
+  return map
+})
+
+function resolveVendor(vendorId: string): string {
+  if (!vendorId) return ''
+  return vendorNameMap.value[vendorId] || vendorId
 }
 
 // ── Date helpers ─────────────────────────────────────────────
@@ -631,7 +647,7 @@ const totalEventsThisMonth = computed(() => {
               </div>
               <div v-if="selectedEvent.Vendor" class="cal-detail-field">
                 <span class="cal-detail-label">Vendor</span>
-                <span class="cal-detail-value">{{ selectedEvent.Vendor }}</span>
+                <span class="cal-detail-value">{{ resolveVendor(selectedEvent.Vendor) }}</span>
               </div>
             </div>
 
@@ -809,7 +825,7 @@ const totalEventsThisMonth = computed(() => {
                     </span>
                     <span v-if="evt.Vendor" class="flex items-center gap-1 shrink-0">
                       <Icon name="i-lucide-hard-hat" class="size-3 shrink-0" />
-                      {{ evt.Vendor }}
+                      {{ resolveVendor(evt.Vendor) }}
                     </span>
                   </div>
 
