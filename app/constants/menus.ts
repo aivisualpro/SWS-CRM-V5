@@ -170,19 +170,9 @@ export const navMenu: NavMenu[] = [
         link: '/reports/ready-to-fund',
       },
       {
-        title: 'Finance PTO Report',
-        icon: 'i-lucide-calculator',
-        link: '/reports/finance-pto',
-      },
-      {
         title: 'General Report',
         icon: 'i-lucide-clipboard-list',
         link: '/reports/general',
-      },
-      {
-        title: 'Finance Report',
-        icon: 'i-lucide-wallet',
-        link: '/reports/finance',
       },
       {
         title: 'PM Weekly Report',

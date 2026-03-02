@@ -351,7 +351,7 @@ function onProjectSaved() {
                     v-for="project in projects"
                     :key="project['Project ID']"
                     class="px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer group"
-                    @click="navigateTo(`/projects/all-projects?search=${project['Project ID']}`)"
+                    @click="navigateTo(`/projects/${project['Project ID']}`)"
                   >
                     <div class="flex items-start justify-between gap-4">
                       <div class="flex-1 min-w-0">
