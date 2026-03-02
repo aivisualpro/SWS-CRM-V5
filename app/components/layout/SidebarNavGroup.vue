@@ -23,6 +23,13 @@ function getChildTitle(child: { title: string, titleKey?: string }) {
 }
 
 const openCollapsible = ref(false)
+const route = useRoute()
+
+// Auto-open group when a child link is the current route
+const hasActiveChild = computed(() =>
+  props.item.children?.some(c => c.link === route.path) ?? false,
+)
+watch(hasActiveChild, (active) => { if (active) openCollapsible.value = true }, { immediate: true })
 </script>
 
 <template>
@@ -35,7 +42,7 @@ const openCollapsible = ref(false)
     >
       <SidebarMenuItem>
         <CollapsibleTrigger as-child>
-          <SidebarMenuButton :tooltip="displayTitle" :size="size">
+          <SidebarMenuButton :tooltip="displayTitle" :size="size" :data-active="hasActiveChild">
             <Icon :name="item.icon || ''" mode="svg" />
             <span>{{ displayTitle }}</span>
             <span v-if="item.new" class="rounded-md bg-[#adfa1d] px-1.5 py-0.5 text-xs text-black leading-none no-underline group-hover:no-underline">

@@ -19,23 +19,19 @@ const displayTitle = computed(() =>
   props.item.titleKey ? t(props.item.titleKey as TranslationKey) : props.item.title,
 )
 
-// Prefix-based active detection: highlights when current route is under the link's section
+// Active detection: exact match, or prefix match only for single-segment root links
 const isActive = computed(() => {
   const currentPath = route.path
   const linkPath = props.item.link
   if (!linkPath) return false
-  // Exact match
+  // Exact match always wins
   if (currentPath === linkPath) return true
-  // For links like /finances — match /finances and /finances/*
   const segments = linkPath.split('/').filter(Boolean)
+  // For single-segment links like /finances — match /finances/*
   if (segments.length === 1) {
-    return currentPath === linkPath || currentPath.startsWith(linkPath + '/')
+    return currentPath.startsWith(linkPath + '/')
   }
-  // For links like /projects/all-projects — match any /projects/* route
-  if (segments.length >= 2) {
-    const basePath = `/${segments[0]}`
-    return currentPath.startsWith(basePath + '/')
-  }
+  // For multi-segment links (e.g. /reports/financial) — exact match only
   return false
 })
 </script>
