@@ -365,24 +365,29 @@ const weekDates = computed(() => {
   })
 })
 
-const hours = Array.from({ length: 16 }, (_, i) => i + 6) // 6 AM to 9 PM
-
 function eventsForWeekDay(date: Date): any[] {
   const key = date.toISOString().split('T')[0]!
   return eventsByDateKey.value.get(key) || []
 }
 
-function eventTopPx(event: any): number {
-  if (!event._startDate) return 0
-  const h = event._startDate.getHours() - 6
-  const m = event._startDate.getMinutes()
-  return h * 60 + m // 1px per minute
-}
-
-function eventHeightPx(event: any): number {
-  if (!event._startDate || !event._endDate) return 30
-  const diff = (event._endDate.getTime() - event._startDate.getTime()) / (1000 * 60)
-  return Math.max(diff, 20) // minimum 20px
+// Group events by hour for agenda-style week view
+function groupEventsByHour(date: Date): { hour: number, label: string, events: any[] }[] {
+  const dayEvents = eventsForWeekDay(date)
+  if (!dayEvents.length) return []
+  const groups: Record<number, any[]> = {}
+  for (const evt of dayEvents) {
+    const h = evt._startDate ? evt._startDate.getHours() : 0
+    if (!groups[h]) groups[h] = []
+    groups[h].push(evt)
+  }
+  return Object.entries(groups)
+    .map(([h, evts]) => {
+      const hour = Number(h)
+      const hh = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+      const ampm = hour >= 12 ? 'PM' : 'AM'
+      return { hour, label: `${hh}:00 ${ampm}`, events: evts.sort((a: any, b: any) => (a._startDate?.getTime() || 0) - (b._startDate?.getTime() || 0)) }
+    })
+    .sort((a, b) => a.hour - b.hour)
 }
 
 function prevWeek() {
@@ -396,6 +401,17 @@ function nextWeek() {
   d.setDate(d.getDate() + 7)
   currentDate.value = d
 }
+
+// Week label for header
+const weekLabel = computed(() => {
+  const start = weekDates.value[0]!
+  const end = weekDates.value[6]!
+  const sameMonth = start.getMonth() === end.getMonth()
+  if (sameMonth) {
+    return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' })}`
+  }
+  return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+})
 
 // ── Stats ────────────────────────────────────────────────────
 const totalEventsThisMonth = computed(() => {
@@ -537,51 +553,80 @@ const totalEventsThisMonth = computed(() => {
           </div>
         </div>
 
-        <!-- ══════════ WEEK VIEW ══════════ -->
-        <div v-else class="flex-1 min-h-0 overflow-auto">
-          <div class="cal-week-grid">
-            <!-- Time gutter -->
-            <div class="cal-week-gutter">
-              <div class="cal-week-gutter__header" />
-              <div v-for="hour in hours" :key="hour" class="cal-week-gutter__cell">
-                {{ hour > 12 ? hour - 12 : hour }}{{ hour >= 12 ? 'PM' : 'AM' }}
-              </div>
-            </div>
+        <!-- ══════════ WEEK VIEW (Agenda Style) ══════════ -->
+        <div v-else class="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <!-- Week range label -->
+          <div class="shrink-0 px-3 py-1.5 border-b bg-muted/20">
+            <span class="text-xs font-medium text-muted-foreground">{{ weekLabel }}</span>
+          </div>
 
-            <!-- Day columns -->
+          <!-- Day columns -->
+          <div class="flex-1 min-h-0 grid grid-cols-7 divide-x overflow-hidden">
             <div
               v-for="date in weekDates"
               :key="date.toISOString()"
-              class="cal-week-col"
-              :class="{ 'cal-week-col--today': isToday(date) }"
+              class="flex flex-col min-h-0 min-w-0"
+              :class="isToday(date) ? 'bg-primary/[0.02]' : ''"
             >
               <!-- Day header -->
-              <div class="cal-week-col__header" :class="{ 'cal-week-col__header--today': isToday(date) }">
-                <span class="text-[10px] uppercase font-medium text-muted-foreground">{{ weekDays[date.getDay()] }}</span>
-                <span class="text-lg font-semibold leading-none" :class="isToday(date) ? 'text-primary' : ''">{{ date.getDate() }}</span>
+              <div class="shrink-0 px-2 py-2 border-b text-center space-y-0.5" :class="isToday(date) ? 'bg-primary/5 border-primary/20' : 'bg-card/50'">
+                <div class="text-[10px] uppercase font-medium" :class="isToday(date) ? 'text-primary' : 'text-muted-foreground'">{{ weekDays[date.getDay()] }}</div>
+                <div class="text-lg font-bold leading-none" :class="isToday(date) ? 'text-primary' : ''" >{{ date.getDate() }}</div>
+                <div class="text-[9px] tabular-nums font-medium" :class="eventsForWeekDay(date).length > 0 ? 'text-primary' : 'text-muted-foreground/40'">
+                  {{ eventsForWeekDay(date).length }} event{{ eventsForWeekDay(date).length !== 1 ? 's' : '' }}
+                </div>
               </div>
 
-              <!-- Hour slots -->
-              <div class="cal-week-col__body">
-                <div v-for="hour in hours" :key="hour" class="cal-week-hour-slot" />
+              <!-- Day content (scrollable) -->
+              <div class="flex-1 min-h-0 overflow-y-auto">
+                <!-- Empty state -->
+                <div v-if="eventsForWeekDay(date).length === 0" class="flex items-center justify-center h-full">
+                  <span class="text-[10px] text-muted-foreground/30">No events</span>
+                </div>
 
-                <!-- Events overlay -->
-                <div
-                  v-for="evt in eventsForWeekDay(date)"
-                  :key="evt['Event  ID']"
-                  class="cal-week-event"
-                  :class="[getEventColor(evt['Event Type']).bg, getEventColor(evt['Event Type']).text, getEventColor(evt['Event Type']).border]"
-                  :style="{ top: eventTopPx(evt) + 'px', height: eventHeightPx(evt) + 'px' }"
-                  draggable="true"
-                  @dragstart="onDragStart($event, evt)"
-                  @click.stop="openEventDetail(evt)"
-                >
-                  <div class="cal-week-event__content">
-                    <span class="font-medium text-[10px] leading-tight">{{ evt['Event Type'] || 'Event' }}</span>
-                    <span class="text-[9px] opacity-70">{{ formatTime(evt._startDate) }}</span>
+                <!-- Grouped by hour -->
+                <div v-else class="pb-2">
+                  <div v-for="group in groupEventsByHour(date)" :key="group.hour" class="week-hour-group">
+                    <!-- Hour header -->
+                    <div class="week-hour-header">
+                      <span class="text-[9px] font-semibold tabular-nums text-muted-foreground/60">{{ group.label }}</span>
+                      <span class="text-[8px] tabular-nums text-muted-foreground/40 bg-muted/60 rounded-full px-1.5 py-0">{{ group.events.length }}</span>
+                    </div>
+
+                    <!-- Events -->
+                    <div class="space-y-0.5 px-1">
+                      <button
+                        v-for="evt in group.events"
+                        :key="evt['Event  ID']"
+                        class="week-event-card group"
+                        :class="[getEventColor(evt['Event Type']).bg, getEventColor(evt['Event Type']).border]"
+                        @click.stop="openEventDetail(evt)"
+                      >
+                        <div class="week-event-dot" :class="getEventColor(evt['Event Type']).dot" />
+                        <div class="flex-1 min-w-0 text-left">
+                          <div class="flex items-center gap-1">
+                            <span class="text-[10px] font-semibold truncate" :class="getEventColor(evt['Event Type']).text">
+                              {{ evt['Event Type'] || 'Event' }}
+                            </span>
+                            <Badge v-if="evt['Event Status']" variant="outline" class="week-event-status-badge" :class="evt['Event Status']?.toLowerCase() === 'pending' ? 'border-amber-400/30 text-amber-600 dark:text-amber-400' : evt['Event Status']?.toLowerCase() === 'confirmed' ? 'border-emerald-400/30 text-emerald-600 dark:text-emerald-400' : ''">
+                              {{ evt['Event Status'] }}
+                            </Badge>
+                          </div>
+                          <div class="text-[9px] text-muted-foreground tabular-nums mt-0.5">
+                            {{ formatTime(evt._startDate) }}<template v-if="evt._endDate"> – {{ formatTime(evt._endDate) }}</template>
+                          </div>
+                          <div v-if="evt['Customer Address'] || evt['Event Address'] || evt.Vendor" class="flex items-center gap-1 mt-0.5 text-[9px] text-muted-foreground/60 truncate">
+                            <Icon v-if="evt['Customer Address'] || evt['Event Address']" name="i-lucide-map-pin" class="size-2.5 shrink-0" />
+                            <span v-if="evt['Customer Address'] || evt['Event Address']" class="truncate">{{ evt['Customer Address'] || evt['Event Address'] }}</span>
+                            <template v-if="evt.Vendor">
+                              <span class="text-muted-foreground/20">·</span>
+                              <span class="truncate">{{ resolveVendor(evt.Vendor) }}</span>
+                            </template>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
                   </div>
-                  <!-- Resize handle -->
-                  <div class="cal-week-event__resize" @mousedown="onResizeStart($event, evt)" />
                 </div>
               </div>
             </div>
@@ -1047,58 +1092,55 @@ const totalEventsThisMonth = computed(() => {
   border-bottom: 2px solid var(--primary);
 }
 
-.cal-week-col__body {
-  position: relative;
+/* ── Week Agenda View ───────────────────────────────────── */
+.week-hour-group {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
 }
 
-.cal-week-hour-slot {
-  height: 60px;
-  border-bottom: 1px solid var(--border);
+.week-hour-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--sidebar-background, var(--background)) 95%, transparent);
+  backdrop-filter: blur(8px);
 }
 
-/* ── Week event block ─────────────────────────────────────── */
-.cal-week-event {
-  position: absolute;
-  left: 2px;
-  right: 2px;
+.week-event-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.3rem 0.375rem;
   border-radius: 0.375rem;
   border: 1px solid;
-  cursor: grab;
-  z-index: 5;
-  overflow: hidden;
-  transition: box-shadow 0.15s, transform 0.1s;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: left;
 }
 
-.cal-week-event:hover {
-  z-index: 10;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  transform: scale(1.01);
+.week-event-card:hover {
+  transform: translateX(1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.cal-week-event:active {
-  cursor: grabbing;
+.week-event-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
-.cal-week-event__content {
-  display: flex;
-  flex-direction: column;
-  padding: 0.25rem 0.375rem;
-  overflow: hidden;
-}
-
-.cal-week-event__resize {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  cursor: s-resize;
-  background: linear-gradient(transparent, rgba(0,0,0,0.06));
-  border-radius: 0 0 0.375rem 0.375rem;
-}
-
-.cal-week-event__resize:hover {
-  background: linear-gradient(transparent, rgba(0,0,0,0.15));
+.week-event-status-badge {
+  font-size: 7px !important;
+  padding: 0 4px !important;
+  height: 13px !important;
+  line-height: 13px !important;
+  font-weight: 600;
 }
 
 /* ── Detail modal ─────────────────────────────────────────── */
