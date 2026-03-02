@@ -46,24 +46,46 @@ function filterExcluding(excludeKey: string): any[] {
   return recs
 }
 
+// Title Case: "PENDING METERSPOT" → "Pending Meterspot", preserves known abbreviations
+const _abbrevs = new Set(['pto', 'mpu', 'n/a', 'tbd', 'hvac', 'r&r', 'ntp', 'ahj', 'hoa'])
+function titleCase(s: string): string {
+  return s.toLowerCase().split(/(\s+)/).map(w => _abbrevs.has(w) ? w.toUpperCase() : (w.charAt(0).toUpperCase() + w.slice(1))).join('')
+}
+
 function splitCountSorted(records: any[], field: string): { value: string, count: number }[] {
   const counts: Record<string, number> = {}
   for (const p of records) {
-    const raw = p[field]; if (!raw) continue
-    String(raw).split(',').forEach(part => { const t = part.trim(); if (t) counts[t] = (counts[t] || 0) + 1 })
+    const raw = str(p[field]); if (!raw) continue
+    raw.split(',').forEach(part => {
+      const t = part.trim(); if (!t) return
+      const key = t.toLowerCase()
+      counts[key] = (counts[key] || 0) + 1
+    })
   }
-  return Object.entries(counts).map(([value, count]) => ({ value, count })).sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: 'base' }))
+  return Object.entries(counts).map(([key, count]) => ({ value: titleCase(key), count })).sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: 'base' }))
 }
 
 function emailCountSorted(records: any[], field: string): { email: string, name: string, count: number }[] {
   const counts: Record<string, number> = {}
   for (const p of records) {
-    const raw = p[field]; if (!raw) continue
-    String(raw).split(',').forEach(part => { const t = part.trim(); if (t) counts[t] = (counts[t] || 0) + 1 })
+    const raw = str(p[field]); if (!raw) continue
+    raw.split(',').forEach(part => {
+      const t = part.trim(); if (!t) return
+      const key = t.toLowerCase()
+      counts[key] = (counts[key] || 0) + 1
+    })
   }
-  return Object.entries(counts).map(([email, count]) => ({
-    email, count, name: userNameMap.value[email.toLowerCase()] || email,
-  })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  return Object.entries(counts).map(([key, count]) => {
+    let name = userNameMap.value[key]
+    if (!name) {
+      const local = key.split('@')[0] || key
+      name = local.replace(/[._-]/g, ' ').split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    } else {
+      // Title case even mapped names: "ANGELA BIBAOCO" → "Angela Bibaoco"
+      name = titleCase(name)
+    }
+    return { email: key, count, name }
+  }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 }
 
 const statuses = computed(() => splitCountSorted(filterExcluding('status'), 'Project Status'))
@@ -78,13 +100,14 @@ const salesRepOpts = computed(() => {
   const recs = filterExcluding('salesRep')
   const counts: Record<string, number> = {}
   for (const p of recs) {
-    const raw = p['Sales Rep']; if (!raw) continue
-    String(raw).split(',').forEach(part => { const t = part.trim(); if (t) counts[t] = (counts[t] || 0) + 1 })
+    const raw = str(p['Sales Rep']); if (!raw) continue
+    raw.split(',').forEach(part => { const t = part.trim(); if (t) counts[t] = (counts[t] || 0) + 1 })
   }
-  return Object.entries(counts).map(([email, count]) => {
-    const sr = salesReps.value.find((r: any) => r.Email?.toLowerCase() === email.toLowerCase())
-    const name = sr ? `${sr['First Name'] || ''} ${sr['Last Name'] || ''}`.trim() : (userNameMap.value[email.toLowerCase()] || email)
-    return { email, name, count }
+  return Object.entries(counts).map(([rowId, count]) => {
+    const sr = salesReps.value.find((r: any) => str(r['Row ID']) === rowId)
+    const rawName = sr ? `${str(sr['First Name'])} ${str(sr['Last Name'])}`.trim() : rowId
+    const name = titleCase(rawName || rowId)
+    return { email: rowId, name, count }
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 })
 
@@ -117,17 +140,26 @@ function toggleFilter(key: string, val: string) {
 function fieldMatchesAny(fieldValue: string | undefined | null, selected: string[]): boolean {
   if (!selected.length) return true
   if (!fieldValue) return false
-  const parts = String(fieldValue).split(',').map(s => s.trim().toLowerCase())
+  const parts = str(fieldValue).split(',').map(s => s.trim().toLowerCase())
   return selected.some(sel => parts.some(part => part === sel.toLowerCase()))
 }
 
 // ─── Parse helpers ──────────────────────────────────
+// Unwrap BigQuery object values {value: "x"} → "x"
+function str(val: any): string {
+  if (!val) return ''
+  if (typeof val === 'object' && val.value !== undefined) return String(val.value)
+  return String(val)
+}
 function parseDate(val: any): Date | null {
   if (!val) return null
   try { const d = new Date(val?.value || val); return isNaN(d.getTime()) ? null : d } catch { return null }
 }
 function parsePrice(val: any): number {
-  if (!val) return 0; const n = Number.parseFloat(String(val).replace(/[^0-9.-]/g, '')); return Number.isNaN(n) ? 0 : n
+  if (!val) return 0
+  const raw = val?.value !== undefined ? val.value : val
+  const n = Number.parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+  return Number.isNaN(n) ? 0 : n
 }
 function fmt(n: number): string {
   const a = Math.abs(n)
@@ -140,8 +172,14 @@ function formatDate(val: any): string {
   if (!val) return '—'
   try { return new Date(val?.value || val).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) } catch { return '—' }
 }
-function resolveName(email: string): string { return !email ? '—' : (userNameMap.value[email.toLowerCase()] || email) }
-function resolveCustomer(p: any): string { return customerNameMap.value[p['Customer ID']] || p['Customer name'] || '—' }
+function resolveName(email: any): string {
+  const e = str(email); if (!e) return '—'
+  const mapped = userNameMap.value[e.toLowerCase()]
+  if (mapped) return titleCase(mapped)
+  const local = e.split('@')[0] || e
+  return local.replace(/[._-]/g, ' ').split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+function resolveCustomer(p: any): string { return customerNameMap.value[str(p['Customer ID'])] || str(p['Customer name']) || '—' }
 function statusColor(s: string): string {
   const l = (s || '').toLowerCase()
   if (['complete', 'closed', 'rcvd', 'done', 'approved'].some(k => l.includes(k))) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
@@ -210,8 +248,8 @@ const monthlyTrend = computed(() => {
 const statusData = computed(() => {
   const g: Record<string, { count: number, revenue: number }> = {}
   filteredProjects.value.forEach(p => {
-    const raw = p['Project Status'] || 'Unknown'
-    const parts = String(raw).split(',').map(s => s.trim()).filter(Boolean)
+    const raw = str(p['Project Status']) || 'Unknown'
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
     const rev = parsePrice(p['Project Price'])
     parts.forEach(s => {
       if (!g[s]) g[s] = { count: 0, revenue: 0 }
@@ -225,14 +263,19 @@ const statusMax = computed(() => statusData.value[0]?.revenue ?? 1)
 
 const typeData = computed(() => {
   const g: Record<string, number> = {}
-  filteredProjects.value.forEach(p => { const t = p['Project Type'] || 'Other'; g[t] = (g[t] || 0) + parsePrice(p['Project Price']) })
+  filteredProjects.value.forEach(p => {
+    const raw = str(p['Project Type']) || 'Other'
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+    const rev = parsePrice(p['Project Price'])
+    parts.forEach(t => { g[t] = (g[t] || 0) + rev / parts.length })
+  })
   return Object.entries(g).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value).slice(0, 6)
 })
 
 const branchData = computed(() => {
   const g: Record<string, { revenue: number, count: number }> = {}; let total = 0
   filteredProjects.value.forEach(p => {
-    const b = p['Branch Name'] || 'Other'; const pr = parsePrice(p['Project Price'])
+    const b = str(p['Branch Name']) || 'Other'; const pr = parsePrice(p['Project Price'])
     if (!g[b]) g[b] = { revenue: 0, count: 0 }; g[b].revenue += pr; g[b].count++; total += pr
   })
   return Object.entries(g).map(([branch, d]) => ({ branch, revenue: Math.round(d.revenue), count: d.count, pct: total > 0 ? Math.round((d.revenue / total) * 100) : 0 })).sort((a, b) => b.revenue - a.revenue).slice(0, 6)
@@ -241,9 +284,9 @@ const branchData = computed(() => {
 const pmLeaderboard = computed(() => {
   const g: Record<string, { revenue: number, count: number, completed: number }> = {}
   filteredProjects.value.forEach(p => {
-    const pm = p['Project Manager'] || ''; if (!pm) return
+    const pm = str(p['Project Manager']); if (!pm) return
     if (!g[pm]) g[pm] = { revenue: 0, count: 0, completed: 0 }; g[pm].revenue += parsePrice(p['Project Price']); g[pm].count++
-    const s = (p['Project Status'] || '').toLowerCase()
+    const s = str(p['Project Status']).toLowerCase()
     if (s.includes('complete') || s.includes('done') || s.includes('closed')) g[pm].completed++
   })
   return Object.entries(g).map(([email, d]) => ({
@@ -255,22 +298,22 @@ const pmLeaderboard = computed(() => {
 
 const jobStatusData = computed(() => {
   const g: Record<string, number> = {}
-  filteredProjects.value.forEach(p => { const s = p['Job Status'] || 'Unknown'; g[s] = (g[s] || 0) + 1 })
+  filteredProjects.value.forEach(p => { const s = str(p['Job Status']) || 'Unknown'; g[s] = (g[s] || 0) + 1 })
   return Object.entries(g).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
 })
 
 const topProjects = computed(() => {
   return [...filteredProjects.value].sort((a, b) => parsePrice(b['Project Price']) - parsePrice(a['Project Price'])).slice(0, 10).map(p => ({
-    id: p['Project ID'], customer: resolveCustomer(p), branch: p['Branch Name'] || '—', type: p['Project Type'] || '—',
-    price: parsePrice(p['Project Price']), net: parsePrice(p['Project Net Amount']), status: p['Project Status'] || '—',
-    pm: resolveName(p['Project Manager']), start: formatDate(p['Project Start']),
+    id: str(p['Project ID']), customer: resolveCustomer(p), branch: str(p['Branch Name']) || '—', type: str(p['Project Type']) || '—',
+    price: parsePrice(p['Project Price']), net: parsePrice(p['Project Net Amount']), status: str(p['Project Status']) || '—',
+    pm: resolveName(str(p['Project Manager'])), start: formatDate(p['Project Start']),
   }))
 })
 
 const equipmentData = computed(() => {
   const g: Record<string, { count: number, kw: number }> = {}
   filteredProjects.value.forEach(p => {
-    const eq = p['Solar Equipment'] || p['Project Equipment'] || 'Unknown'; if (!g[eq]) g[eq] = { count: 0, kw: 0 }; g[eq].count++; g[eq].kw += parseFloat(p['KW']) || 0
+    const eq = str(p['Solar Equipment']) || str(p['Project Equipment']) || 'Unknown'; if (!g[eq]) g[eq] = { count: 0, kw: 0 }; g[eq].count++; g[eq].kw += parseFloat(str(p['KW'])) || 0
   })
   return Object.entries(g).map(([name, d]) => ({ name, count: d.count, kw: Math.round(d.kw * 10) / 10 })).sort((a, b) => b.count - a.count).slice(0, 8)
 })
@@ -282,7 +325,7 @@ const ptoData = computed(() => {
     { label: 'PM Approved', field: 'PM Approve Project' },
   ]
   return buckets.map(b => {
-    const filled = filteredProjects.value.filter(p => p[b.field] && p[b.field] !== '—' && p[b.field] !== '').length
+    const filled = filteredProjects.value.filter(p => { const v = str(p[b.field]); return v && v !== '—' && v !== '' }).length
     return { label: b.label, filled, total: filteredProjects.value.length, pct: filteredProjects.value.length > 0 ? Math.round((filled / filteredProjects.value.length) * 100) : 0 }
   })
 })

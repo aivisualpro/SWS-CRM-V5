@@ -190,9 +190,14 @@ export const navMenu: NavMenu[] = [
         link: '/reports/pm-weekly',
       },
       {
-        title: 'Permit / Document Report',
-        icon: 'i-lucide-file-check',
-        link: '/reports/permit-document',
+        title: 'Permits Report',
+        icon: 'i-lucide-stamp',
+        link: '/reports/permit',
+      },
+      {
+        title: 'Documents Requested',
+        icon: 'i-lucide-file-search',
+        link: '/reports/documents-requested',
       },
       {
         title: 'PTO Expire 1st Notification',
