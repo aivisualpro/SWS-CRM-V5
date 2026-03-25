@@ -176,7 +176,6 @@ const USER_COL_FIELD: Record<string, string> = {
   status: 'Status',
   location: 'Location',
   utc: 'UTC',
-  lastLoginDate: 'Last Login Date',
 }
 
 const sortedUsers = computed(() => {
@@ -304,9 +303,6 @@ function statusLabel(u: any): boolean {
               <TableHead class="min-w-[70px] bg-card cursor-pointer select-none" @click="toggleSort('utc')">
                 <div class="flex items-center gap-1">UTC <Icon :name="sortIcon('utc')" class="size-3 opacity-60" /></div>
               </TableHead>
-              <TableHead class="min-w-[170px] bg-card cursor-pointer select-none" @click="toggleSort('lastLoginDate')">
-                <div class="flex items-center gap-1">Last Login Date <Icon :name="sortIcon('lastLoginDate')" class="size-3 opacity-60" /></div>
-              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -374,16 +370,11 @@ function statusLabel(u: any): boolean {
 
               <!-- UTC -->
               <TableCell class="text-muted-foreground text-sm">{{ user.UTC != null ? `UTC${user.UTC >= 0 ? '+' : ''}${user.UTC}` : '—' }}</TableCell>
-
-              <!-- Last Login Date -->
-              <TableCell>
-                <span class="text-muted-foreground text-sm">{{ user['Last Login Date'] || user['Last Log In TimeStamp'] || '—' }}</span>
-              </TableCell>
             </TableRow>
 
             <!-- Empty State -->
             <TableRow v-if="visibleUsers.length === 0">
-              <TableCell :colspan="12" class="h-32 text-center">
+              <TableCell :colspan="11" class="h-32 text-center">
                 <div class="flex flex-col items-center gap-2 text-muted-foreground">
                   <Icon name="i-lucide-inbox" class="size-8" />
                   <p>No users found</p>
@@ -397,7 +388,7 @@ function statusLabel(u: any): boolean {
 
             <!-- Infinite scroll sentinel -->
             <tr v-if="hasMore" ref="sentinelRef">
-              <td :colspan="12" class="h-10 text-center text-xs text-muted-foreground">
+              <td :colspan="11" class="h-10 text-center text-xs text-muted-foreground">
                 Loading more…
               </td>
             </tr>

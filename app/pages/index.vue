@@ -68,7 +68,6 @@ const quickLinks = computed(() => [
   { label: 'Events Calendar', count: events.value.length, icon: 'i-lucide-calendar-days', link: '/events/calendar', color: 'text-violet-500', bg: 'bg-violet-500/10' },
   { label: 'Project Chat', count: null, icon: 'i-lucide-message-circle', link: '/project-chats', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   { label: 'Customers', count: Object.keys(customerNameMap.value).length, icon: 'i-lucide-users', link: '/customers', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  { label: 'Sales Report', count: null, icon: 'i-lucide-trending-up', link: '/reports/sales', color: 'text-pink-500', bg: 'bg-pink-500/10' },
   { label: 'Financial Report', count: null, icon: 'i-lucide-pie-chart', link: '/reports/financial', color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
 ])
 
