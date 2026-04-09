@@ -80,25 +80,21 @@ function openEdit(role: any) {
 }
 
 async function handleSave() {
-  saving.value = true
-  try {
-    if (editingRole.value) {
-      await $fetch('/api/bigquery/roles', { method: 'PUT', body: formData.value })
-      toast.success('Role updated successfully')
-    }
-    else {
-      await $fetch('/api/bigquery/roles', { method: 'POST', body: formData.value })
-      toast.success('Role created successfully')
-    }
-    showDialog.value = false
-    await store.refresh()
-  }
-  catch (e: any) {
-    toast.error(e.data?.statusMessage || 'Failed to save role')
-  }
-  finally {
-    saving.value = false
-  }
+  const isEdit = !!editingRole.value
+
+  // Close dialog immediately
+  showDialog.value = false
+  toast.info(`Saving role in background...`)
+
+  // Run silently in background
+  $fetch('/api/bigquery/roles', { method: isEdit ? 'PUT' : 'POST', body: formData.value })
+    .then(() => {
+      toast.success(isEdit ? 'Role updated successfully' : 'Role created successfully')
+      store.refresh()
+    })
+    .catch((e: any) => {
+      toast.error(e.data?.statusMessage || 'Failed to save role')
+    })
 }
 
 function confirmDelete(role: any) {
@@ -108,16 +104,23 @@ function confirmDelete(role: any) {
 
 async function handleDelete() {
   if (!deletingRole.value) return
-  try {
-    await $fetch('/api/bigquery/roles', { method: 'DELETE', body: { role: deletingRole.value.Role } })
-    toast.success('Role deleted successfully')
-    showDeleteDialog.value = false
-    deletingRole.value = null
-    await store.refresh()
-  }
-  catch (e: any) {
-    toast.error(e.data?.statusMessage || 'Failed to delete role')
-  }
+  
+  const role = deletingRole.value.Role
+
+  // Close dialog immediately
+  showDeleteDialog.value = false
+  deletingRole.value = null
+  toast.info(`Deleting role in background...`)
+
+  // Run silently in background
+  $fetch('/api/bigquery/roles', { method: 'DELETE', body: { role } })
+    .then(() => {
+      toast.success('Role deleted successfully')
+      store.refresh()
+    })
+    .catch((e: any) => {
+      toast.error(e.data?.statusMessage || 'Failed to delete role')
+    })
 }
 
 // ─── Computed ───────────────────────────────────────────────

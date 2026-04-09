@@ -1,7 +1,8 @@
 <script setup lang="ts">
 const props = defineProps<{
-  roles?: string[]
+  roles?: (string | { name: string, count: number })[]
   activeRole?: string
+  totalCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +30,7 @@ const staticTabs = [
         @click="emit('update:activeRole', '')"
       >
         {{ tab.label }}
+        <span v-if="totalCount !== undefined" class="ml-1 opacity-60 text-[10px] bg-background/40 px-1.5 py-0.5 rounded-full">{{ totalCount }}</span>
       </NuxtLink>
 
       <!-- Separator -->
@@ -37,12 +39,13 @@ const staticTabs = [
       <!-- Role filter tabs -->
       <button
         v-for="role in roles"
-        :key="role"
+        :key="typeof role === 'string' ? role : role.name"
         class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all"
-        :class="activeRole === role ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-        @click="emit('update:activeRole', activeRole === role ? '' : role)"
+        :class="activeRole === (typeof role === 'string' ? role : role.name) ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
+        @click="emit('update:activeRole', activeRole === (typeof role === 'string' ? role : role.name) ? '' : (typeof role === 'string' ? role : role.name))"
       >
-        {{ role }}
+        {{ typeof role === 'string' ? role : role.name }}
+        <span v-if="typeof role !== 'string' && role.count !== undefined" class="ml-1 opacity-60 text-[10px] bg-background/40 px-1.5 py-0.5 rounded-full">{{ role.count }}</span>
       </button>
     </div>
 

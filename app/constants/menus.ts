@@ -34,6 +34,11 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-shield-check',
         link: '/admin/roles',
       },
+      {
+        title: 'Dropdowns',
+        icon: 'i-lucide-list-collapse',
+        link: '/admin/dropdowns',
+      },
     ],
   },
   {

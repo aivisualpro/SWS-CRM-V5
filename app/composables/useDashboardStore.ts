@@ -23,6 +23,7 @@ const _salesReps = ref<any[]>([])
 const _notifications = ref<any[]>([])
 const _chatProjects = ref<any[]>([])
 const _roles = ref<any[]>([])
+const _dropdowns = ref<any[]>([])
 
 const _userNameMap = ref<Record<string, string>>({})
 const _customerNameMap = ref<Record<string, string>>({})
@@ -68,7 +69,7 @@ async function _fetchAll() {
     if (_fetching.value) return
     _fetching.value = true
     try {
-        const [projData, eventData, userData, custData, notesData, permitsData, docReqData, finData, tasksData, paymentsData, ticketsData, vendorsData, salesRepsData, chatProjData, rolesData] = await Promise.all([
+        const [projData, eventData, userData, custData, notesData, permitsData, docReqData, finData, tasksData, paymentsData, ticketsData, vendorsData, salesRepsData, chatProjData, rolesData, dropdownsData] = await Promise.all([
             $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/projects').catch(() => ({ success: false, projects: [] })),
             $fetch<{ success: boolean, events: any[] }>('/api/bigquery/events').catch(() => ({ success: false, events: [] })),
             $fetch<{ success: boolean, users: any[] }>('/api/bigquery/users').catch(() => ({ success: false, users: [] })),
@@ -84,6 +85,7 @@ async function _fetchAll() {
             $fetch<{ success: boolean, salesReps: any[] }>('/api/bigquery/sales-reps').catch(() => ({ success: false, salesReps: [] })),
             $fetch<{ success: boolean, projects: any[] }>('/api/bigquery/chat-projects').catch(() => ({ success: false, projects: [] })),
             $fetch<{ success: boolean, roles: any[] }>('/api/bigquery/roles').catch(() => ({ success: false, roles: [] })),
+            $fetch<{ success: boolean, dropdowns: any[] }>('/api/bigquery/dropdowns').catch(() => ({ success: false, dropdowns: [] })),
         ])
         if (projData.success) _projects.value = projData.projects
         if (eventData.success) _events.value = eventData.events
@@ -100,6 +102,7 @@ async function _fetchAll() {
         if (salesRepsData.success) _salesReps.value = salesRepsData.salesReps
         if (chatProjData.success) _chatProjects.value = chatProjData.projects
         if (rolesData.success) _roles.value = rolesData.roles
+        if (dropdownsData.success) _dropdowns.value = dropdownsData.dropdowns
 
         // ─── Normalize casing for consistent display ────────────
         const tc = (s: string) => s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -178,6 +181,7 @@ export function useDashboardStore() {
         notifications: readonly(_notifications),
         chatProjects: readonly(_chatProjects),
         roles: readonly(_roles),
+        dropdowns: readonly(_dropdowns),
         userNameMap: readonly(_userNameMap),
         customerNameMap: readonly(_customerNameMap),
         projectMap: readonly(_projectMap),
